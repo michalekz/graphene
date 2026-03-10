@@ -147,72 +147,16 @@ class TickerTickCollector(BaseCollector):
         )
         return headlines
 
-    async def _fetch_batch(self, tickers: list[str], max_items: int = 100) -> list[Headline]:
-        """Fetch headlines for multiple tickers in a single API call using OR query.
+    async def collect(self, primary_only: bool = False) -> list[Headline]:
+        """Fetch headlines for configured tickers (one API request per ticker).
 
-        TickerTick supports: q=tt:HGRAF OR tt:BSWGF
-        This is much more rate-limit-friendly than one request per ticker.
-        """
-        query = " OR ".join(f"tt:{t}" for t in tickers)
-        url = _API_BASE
-        params = {"q": query, "n": max_items}
+        OR-query syntax is not supported by TickerTick API (returns 400).
+        Sequential per-ticker requests with 12s rate limit between them stay
+        well within the 10 req/min API limit in production (30-min cron runs).
 
-        try:
-            data = await fetch_json(url, params=params)
-        except Exception:
-            logger.exception("[tickertick] Failed to fetch batch=%s", tickers)
-            return []
-
-        if not isinstance(data, dict):
-            return []
-
-        items = data.get("feed", [])
-        if not isinstance(items, list):
-            return []
-
-        headlines: list[Headline] = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            url_val = item.get("url", "").strip()
-            title_val = item.get("title", "").strip()
-            if not url_val or not title_val:
-                continue
-
-            source = item.get("tt", "tickertick").strip() or "tickertick"
-            published_at = _parse_timestamp(item.get("time"))
-            tags = item.get("tags") or []
-            # For batched queries, infer primary ticker from tags
-            primary_ticker = tickers[0]
-            tickers_found = _extract_tickers_from_tags(tags, primary_ticker)
-            # Remove the default primary if it's not actually in the tags
-            tickers_in_tags = {
-                tag.split(":", 1)[1].upper() for tag in tags
-                if isinstance(tag, str) and ":" in tag
-            }
-            if tickers_in_tags:
-                tickers_found = sorted(tickers_in_tags)
-
-            headlines.append(
-                Headline(
-                    url=url_val,
-                    title=title_val,
-                    source=source,
-                    published_at=published_at,
-                    tickers=tickers_found,
-                    category="news",
-                    raw_content=None,
-                )
-            )
-
-        logger.debug("[tickertick] batch=%s → %d items", tickers, len(headlines))
-        return headlines
-
-    async def collect(self) -> list[Headline]:
-        """Fetch headlines using batched OR queries to minimize API calls.
-
-        Primary tickers (HGRAF, BSWGF) in one request, competitors in another.
-        Reduces rate-limit pressure from 8 requests to 2 requests per run.
+        Args:
+            primary_only: If True, only query HGRAF + BSWGF (first 2 tickers).
+                         Useful for more frequent lightweight runs.
 
         Returns:
             Deduplicated list of Headline objects.
@@ -221,30 +165,25 @@ class TickerTickCollector(BaseCollector):
             logger.warning("[tickertick] No tickers configured in sources.yaml")
             return []
 
-        # Split into primary (first 2) and competitors (rest)
-        primary = self._tickers[:2]
-        competitors = self._tickers[2:]
-
+        tickers = self._tickers[:2] if primary_only else self._tickers
         all_headlines: list[Headline] = []
         seen_urls: set[str] = set()
 
-        # Batch 1: primary tickers
-        for h in await self._fetch_batch(primary, max_items=self._items_per_ticker):
-            if h.url not in seen_urls:
-                seen_urls.add(h.url)
-                all_headlines.append(h)
+        for ticker in tickers:
+            try:
+                batch = await self._fetch_ticker(ticker)
+            except Exception:
+                logger.exception("[tickertick] Unexpected error for ticker=%s", ticker)
+                batch = []
 
-        # Batch 2: competitor tickers (if any)
-        if competitors:
-            for h in await self._fetch_batch(competitors, max_items=self._items_per_ticker):
+            for h in batch:
                 if h.url not in seen_urls:
                     seen_urls.add(h.url)
                     all_headlines.append(h)
 
         logger.info(
-            "[tickertick] Collected %d unique headlines (primary=%s, competitors=%s)",
+            "[tickertick] Collected %d unique headlines across %d tickers",
             len(all_headlines),
-            primary,
-            competitors,
+            len(tickers),
         )
         return all_headlines
