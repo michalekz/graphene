@@ -1,0 +1,113 @@
+# Graphene Intel — Watched Tickers
+# Primary: HGRAF (HydroGraph) + BSWGF (Black Swan Graphene)
+# Competitors: major graphene sector players
+# Sector context: ETF proxy + commodities
+
+primary:
+  - ticker: HGRAF
+    name: HydroGraph Clean Power
+    canadian: HG.CN
+    exchange: OTCQB
+    production_method: detonation_synthesis
+    feedstock: methane
+    newswire: globenewswire
+    website: https://hydrograph.com
+    investors_url: https://hydrograph.com/investors
+    keywords:
+      - HydroGraph
+      - HGRAF
+      - "HG.CN"
+      - "Fractal Graphene"
+      - "Hyperion reactor"
+    watch_catalysts:
+      - NASDAQ listing application
+      - Texas facility opening
+      - Named customer announcements
+      - Quarterly filings (cash runway)
+      - Insider trades (Form 4 / SEDI)
+
+  - ticker: BSWGF
+    name: Black Swan Graphene
+    canadian: SWAN.V
+    exchange: OTCQX
+    production_method: exfoliation
+    feedstock: graphite
+    newswire: newsfile
+    website: https://blackswangraphene.com
+    investors_url: https://blackswangraphene.com/investors
+    keywords:
+      - "Black Swan Graphene"
+      - BSWGF
+      - SWAN
+      - GraphCore
+      - GEM
+    watch_catalysts:
+      - Named customer revenue
+      - UK facility capacity expansion
+      - Thomas Swan distribution milestones
+      - Quarterly filings
+
+competitors:
+  - ticker: NNXPF
+    name: NanoXplore
+    canadian: GRA
+    exchange: OTCQX
+    role: sector_leader
+    note: >
+      Sector bellwether — only graphene company with meaningful revenue (~C$115M/yr).
+      Drop >5% triggers sector risk signal.
+
+  - ticker: GMGMF
+    name: Graphene Manufacturing Group
+    canadian: GMG
+    exchange: OTCQX
+    role: competitor
+
+  - ticker: ZTEK
+    name: Zentek
+    exchange: NASDAQ
+    role: competitor
+    note: Graphene-enhanced antimicrobial coatings
+
+  - ticker: ARLSF
+    name: Argo Graphene
+    canadian: ARGO
+    exchange: OTCQB
+    role: competitor
+
+  - ticker: CVV
+    name: CVD Equipment
+    exchange: NASDAQ
+    role: picks_and_shovels
+    note: Makes equipment used in graphene production — proxy for sector capex
+
+  - ticker: FGPHF
+    name: First Graphene
+    canadian: FGR
+    exchange: OTCQX
+    role: competitor
+
+  - ticker: DTPKF
+    name: Directa Plus
+    canadian: DCTA
+    exchange: OTC
+    role: competitor
+    note: European graphene producer with actual revenues (~EUR 7M)
+
+sector_context:
+  - ticker: DMAT
+    name: Global X Disruptive Materials ETF
+    role: sector_proxy
+    note: Closest ETF proxy for graphene/advanced materials sector
+
+commodities:
+  - symbol: "NG=F"
+    name: Natural Gas (Henry Hub)
+    relevance: HGRAF feedstock cost
+    alert_threshold_pct: 10.0
+
+  - symbol: graphite_spot
+    name: Graphite Spot Price
+    relevance: BSWGF / NanoXplore feedstock cost
+    note: No direct yfinance symbol — tracked via proxy or manual
+    alert_threshold_pct: 10.0

@@ -1,0 +1,137 @@
+# Graphene Intel — News Sources Configuration
+# Tier 1: Primary (free, reliable, high relevance)
+# Tier 2: Secondary (broader coverage)
+# Tier 3: Context (industry background)
+
+news_apis:
+  - name: tickertick
+    type: api
+    base_url: https://api.tickertick.com/feed
+    rate_limit_per_min: 10
+    priority: 1
+    tickers:
+      - HGRAF
+      - BSWGF
+      - NNXPF
+      - GMGMF
+      - ZTEK
+      - ARLSF
+      - CVV
+      - FGPHF
+    items_per_ticker: 50
+    note: >
+      Free, no API key required. Aggregates ~10,000 news sources.
+      Query format: GET /feed?q=tt:TICKER&n=50
+
+rss_feeds:
+  # --- Tier 1: Company press releases ---
+  - name: globenewswire_mining
+    type: rss
+    url: "https://www.globenewswire.com/RssFeed/subjectcode/05-Mining/feedTitle/GlobeNewswire%20-%20Mining"
+    priority: 1
+    category: press_releases
+    note: HGRAF publishes press releases here
+
+  - name: globenewswire_technology
+    type: rss
+    url: "https://www.globenewswire.com/RssFeed/subjectcode/16-Technology/feedTitle/GlobeNewswire%20-%20Technology"
+    priority: 1
+    category: press_releases
+
+  # newsfilecorp.com does not offer a public RSS feed — covered via TickerTick + Google News
+
+  # --- Tier 1: Industry specialists ---
+  - name: graphene_info
+    type: rss
+    url: "https://www.graphene-info.com/rss.xml"
+    priority: 1
+    category: industry
+    note: "#1 graphene industry news source globally"
+
+  # --- Tier 2: Tech/nano news ---
+  # nanowerk.com blocks RSS scrapers (403) — use Google News query instead
+
+  - name: phys_org_graphene
+    type: rss
+    url: "https://phys.org/rss-feed/tags/graphene/"
+    priority: 2
+    category: research
+
+  # --- Tier 1: Regulatory filings ---
+  # SEC EDGAR is handled by sec_edgar.py collector using data.sec.gov API (not RSS CGI)
+  # CGI endpoint blocks bots; data.sec.gov API requires specific User-Agent header
+
+google_news:
+  type: rss
+  base_url: "https://news.google.com/rss/search"
+  priority: 1
+  queries:
+    - HGRAF
+    - BSWGF
+    - '"HydroGraph Clean Power"'
+    - '"Black Swan Graphene"'
+    - '"graphene stocks"'
+    - '"graphene production" commercial'
+    - "NanoXplore graphene"
+    - "graphene investment 2026"
+  params:
+    hl: en-US
+    gl: US
+    ceid: "US:en"
+
+sentiment:
+  - name: stocktwits
+    type: api
+    base_url: "https://api.stocktwits.com/api/2/streams/symbol"
+    priority: 1
+    tickers:
+      - HGRAF
+      - BSWGF
+    note: No API key needed for public streams (rate limited)
+
+  - name: reddit
+    type: praw
+    priority: 2
+    subreddits:
+      - pennystocks
+      - smallcaps
+      - graphene
+      - nanotechnology
+      - investing
+    keywords:
+      - HGRAF
+      - BSWGF
+      - HydroGraph
+      - "Black Swan Graphene"
+      - graphene
+    note: Requires REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET in .env
+
+regulatory:
+  - name: sec_edgar_form4
+    type: api
+    base_url: "https://data.sec.gov/submissions"
+    priority: 1
+    note: Insider trading monitoring via edgartools
+
+  - name: sedar_plus
+    type: web
+    base_url: "https://www.sedarplus.ca"
+    priority: 2
+    note: Canadian insider trades. Playwright scraping needed.
+
+patents:
+  - name: patentsview
+    type: api
+    base_url: "https://search.patentsview.org/api/v1/patent"
+    priority: 2
+    keywords:
+      - graphene
+      - "graphene synthesis"
+      - "graphene production"
+      - "detonation graphene"
+
+  - name: lens_org
+    type: web
+    base_url: "https://www.lens.org"
+    priority: 3
+    note: Broader patent search, web scraping

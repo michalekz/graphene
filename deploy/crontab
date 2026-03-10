@@ -1,0 +1,27 @@
+# Graphene Intel — Crontab Configuration
+# Install: crontab /opt/grafene/deploy/crontab
+# Timezone: CET (UTC+1 winter, UTC+2 summer) — cron runs in system TZ
+# RHEL/Linux: ensure system TZ = Europe/Prague or adjust UTC offsets below
+
+SHELL=/bin/bash
+PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+MAILTO=""
+
+# ── News collection (every 30 min, 6:00-23:30 CET = 5:00-22:30 UTC) ────────
+*/30 5-22 * * * cd /opt/grafene && .venv/bin/python scripts/collect.py >> /var/log/graphene-intel/collect.log 2>&1
+
+# ── Headline evaluation + instant alerts (every 35 min, offset from collect)
+*/35 5-22 * * * cd /opt/grafene && .venv/bin/python scripts/evaluate.py >> /var/log/graphene-intel/evaluate.log 2>&1
+
+# ── Price/volume check + anomaly alerts (every 15 min, US market hours) ─────
+# US market: 15:30-22:00 CET = 14:30-21:00 UTC (Mon-Fri)
+*/15 14-21 * * 1-5 cd /opt/grafene && .venv/bin/python scripts/price_check.py >> /var/log/graphene-intel/price.log 2>&1
+
+# ── Daily summary (20:00 CET = 19:00 UTC) ───────────────────────────────────
+0 19 * * * cd /opt/grafene && .venv/bin/python scripts/daily_summary.py >> /var/log/graphene-intel/daily.log 2>&1
+
+# ── Weekly deep report (Sunday 18:00 CET = 17:00 UTC) ───────────────────────
+0 17 * * 0 cd /opt/grafene && .venv/bin/python scripts/weekly_report.py >> /var/log/graphene-intel/weekly.log 2>&1
+
+# ── Log rotation: keep last 30 days of logs (runs daily at 03:00 CET) ───────
+0 2 * * * find /var/log/graphene-intel -name "*.log" -mtime +30 -delete

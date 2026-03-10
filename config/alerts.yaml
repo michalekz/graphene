@@ -1,0 +1,92 @@
+# Graphene Intel — Alert Rules & Scoring Thresholds
+
+scoring:
+  # Headlines with score >= this threshold trigger immediate Telegram alert
+  instant_alert_threshold: 7
+
+  # Headlines with score >= this appear in daily summary
+  daily_summary_threshold: 4
+
+  # Below this: silently stored in DB, never shown
+  ignore_threshold: 3
+
+price_anomalies:
+  # Volume spike: trigger if current volume > X * 20-day average
+  volume_spike_ratio: 3.0
+
+  # Intraday price change: trigger if |change_pct| > threshold
+  intraday_change_pct: 10.0
+
+  # Gap trigger: if open vs prev_close diff > threshold
+  gap_pct: 5.0
+
+  # Moving average breach (bearish signal)
+  ma_breach:
+    periods: [20, 50]
+    direction: below  # alert when price crosses below
+
+  # Sector leader signal: if NanoXplore (GRA) drops > this, alert for whole sector
+  sector_leader_drop_pct: 5.0
+  sector_leader_ticker: NNXPF
+
+  # Commodity spikes: natural gas / graphite
+  commodity_spike_pct: 10.0
+
+sell_signals:
+  # Price drops below N-day moving average
+  ma_breach_warning: [20, 50]
+
+  # Volume spike with price DOWN (distribution signal)
+  volume_spike_with_price_down: true
+
+  # Missed catalyst window: alert if catalyst expected date passes with no news
+  missed_catalyst_alert: true
+
+notifications:
+  # Daily summary time (CET/Prague time = UTC+1/UTC+2)
+  daily_summary_hour_utc: 19  # = 20:00 CET winter / 21:00 CEST summer
+
+  # Weekly report: Sunday
+  weekly_report_day: 6      # 0=Mon ... 6=Sun
+  weekly_report_hour_utc: 17  # = 18:00 CET
+
+  # Max headlines in daily summary
+  daily_summary_max_headlines: 10
+
+  # Telegram message max length before splitting
+  telegram_max_chars: 4096
+
+  # Cooldown: don't send same headline_id alert twice
+  alert_cooldown_hours: 24
+
+red_flags:
+  # These keywords in headlines auto-elevate score by +2
+  boost_keywords:
+    - "going concern"
+    - "reverse split"
+    - "deregistration"
+    - "class action"
+    - "SEC investigation"
+    - "OSC investigation"
+    - "paid promotion"
+    - "management departure"
+    - "CFO resign"
+    - "CEO resign"
+    - "auditor change"
+
+  # These patterns auto-set score to minimum 8
+  critical_patterns:
+    - "NASDAQ listing confirmed"
+    - "NASDAQ application filed"
+    - "named customer"
+    - "revenue milestone"
+    - "regulatory approval"
+    - "major contract"
+
+pump_dump_detection:
+  # Sudden social volume spike without press release = suspicious
+  stocktwits_volume_spike_ratio: 10.0
+  alert_if_no_press_release: true
+  note: >
+    If StockTwits message volume spikes 10x with no matching press release,
+    flag as potential pump & dump for manual review.
