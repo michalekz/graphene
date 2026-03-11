@@ -1,12 +1,13 @@
 """
 Patent filings collector for graphene-intel.
 
-Monitors recent graphene-related patent filings via the PatentsView PatentSearch API
-(https://search.patentsview.org/api/v1/patents — POST, requires X-Api-Key).
+Uses the USPTO Open Data Portal (ODP) Patent Full-Text Search API
+(https://data.uspto.gov — GET, requires X-Api-Key header).
 
-If PATENTSVIEW_API_KEY is not set, the collector skips gracefully.
-Register for a free key at: https://search.patentsview.org/
-NOTE: As of early 2026, new key registrations are temporarily suspended.
+PatentsView migrated to USPTO ODP on March 20, 2026.
+Register for a free API key at: https://my.uspto.gov/user/api-key
+
+If USPTO_API_KEY is not set, the collector skips gracefully.
 
 Relevance scoring:
   - 9: Patent assigned to HydroGraph or Black Swan Graphene
@@ -30,18 +31,19 @@ from src.db.store import Headline, Store
 
 logger = logging.getLogger(__name__)
 
-# ── PatentsView PatentSearch API configuration ────────────────────────────────
+# ── USPTO Open Data Portal API configuration ─────────────────────────────────
 
-# New PatentSearch API (March 2024+) — POST, requires X-Api-Key header
-PATENTSVIEW_BASE = "https://search.patentsview.org/api/v1/patents"
+# USPTO ODP patent search endpoint (PatentsView migrated here March 20, 2026)
+USPTO_SEARCH_BASE = "https://data.uspto.gov/apis/full-text/search/patent"
 
 # Fields to retrieve per patent
 PATENT_FIELDS = [
-    "patent_id",
-    "patent_title",
-    "patent_date",
-    "patent_abstract",
-    "assignee",
+    "patentNumber",
+    "inventionTitle",
+    "filingDate",
+    "grantDate",
+    "abstractText",
+    "applicants",
 ]
 
 PATENTS_PER_PAGE = 100
@@ -70,21 +72,16 @@ COMPETITOR_ASSIGNEE_PATTERNS: list[tuple[str, str]] = [
     ("thomas swan", "BSWGF"),   # Thomas Swan distributes Black Swan's graphene
 ]
 
-# Single combined query covering title + abstract (new API supports _or)
-# Using _text_all (all words must appear) for precision
-PATENT_QUERIES: list[dict[str, Any]] = [
+# Search terms for USPTO full-text search
+# Each entry is a plain query string passed to the USPTO full-text search API
+PATENT_QUERIES: list[dict[str, str]] = [
     {
         "label": "graphene (title or abstract)",
-        "q": {
-            "_or": [
-                {"_text_all": {"patent_title": "graphene"}},
-                {"_text_all": {"patent_abstract": "graphene"}},
-            ]
-        },
+        "q": "graphene",           # full-text search across title + abstract
     },
     {
         "label": "detonation synthesis (HydroGraph process)",
-        "q": {"_text_all": {"patent_title": "detonation synthesis"}},
+        "q": "detonation synthesis",
     },
 ]
 
@@ -147,42 +144,39 @@ def _score_patent(
 # ── PatentsView API fetcher ───────────────────────────────────────────────────
 
 async def _fetch_patents_for_query(
-    query: dict[str, Any],
+    query: dict[str, str],
     since_date: str,
     api_key: str,
 ) -> list[dict[str, Any]]:
     """
-    Fetch patents from PatentsView PatentSearch API (POST) matching the given query.
+    Fetch patents from USPTO Open Data Portal full-text search API.
 
-    Uses the new v2 API: POST to /api/v1/patents with JSON body and X-Api-Key header.
+    Uses GET with query string; filters by filing/grant date >= since_date.
     Returns a list of raw patent dicts from the API response.
     """
-    body: dict[str, Any] = {
-        "q": {
-            "_and": [
-                query["q"],
-                {"_gte": {"patent_date": since_date}},
-            ]
-        },
-        "f": PATENT_FIELDS,
-        "s": [{"patent_date": "desc"}],
-        "o": {"size": PATENTS_PER_PAGE},
+    params: dict[str, Any] = {
+        "q": query["q"],
+        "dateRangeField": "grantDate",
+        "dateRangeStart": since_date,
+        "fields": ",".join(PATENT_FIELDS),
+        "rows": PATENTS_PER_PAGE,
+        "start": 0,
+        "sort": "grantDate desc",
     }
 
     logger.info(
-        "[patents] Fetching PatentSearch query '%s' since %s",
+        "[patents] Fetching USPTO ODP query '%s' since %s",
         query["label"],
         since_date,
     )
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                PATENTSVIEW_BASE,
-                json=body,
+            resp = await client.get(
+                USPTO_SEARCH_BASE,
+                params=params,
                 headers={
                     "X-Api-Key": api_key,
-                    "Content-Type": "application/json",
                     "Accept": "application/json",
                 },
             )
@@ -190,14 +184,15 @@ async def _fetch_patents_for_query(
             data = resp.json()
     except Exception as exc:
         logger.error(
-            "[patents] PatentSearch API request failed for '%s': %s",
+            "[patents] USPTO ODP API request failed for '%s': %s",
             query["label"],
             exc,
         )
         return []
 
+    # USPTO ODP response structure: {"patents": [...], "totalCount": N}
     patents: list[dict[str, Any]] = data.get("patents", []) or []
-    total = data.get("total_hits", len(patents))
+    total = data.get("totalCount", len(patents))
     logger.info(
         "[patents] Query '%s': %d patents returned (total matching: %s)",
         query["label"],
@@ -209,17 +204,23 @@ async def _fetch_patents_for_query(
 
 def _extract_assignee(patent: dict[str, Any]) -> str:
     """
-    Extract the primary assignee organization name from a patent record.
+    Extract the primary assignee/applicant organization name from a patent record.
 
-    New PatentSearch API returns 'assignee' as a dict (or list); we handle both.
+    USPTO ODP uses 'applicants' list with 'name' or 'orgName' keys.
+    Falls back to legacy 'assignee' dict/list format from PatentsView.
     """
+    # USPTO ODP: applicants list
+    applicants = patent.get("applicants")
+    if applicants and isinstance(applicants, list):
+        first = applicants[0]
+        return first.get("orgName") or first.get("name") or ""
+
+    # Legacy fallback: assignee dict or list
     raw = patent.get("assignee")
     if not raw:
         return ""
-    # New API: dict with assignee_organization key
     if isinstance(raw, dict):
         return raw.get("assignee_organization", "") or ""
-    # Fallback: list of dicts (legacy format)
     if isinstance(raw, list) and raw:
         return raw[0].get("assignee_organization", "") or ""
     return ""
@@ -335,26 +336,25 @@ async def collect_patents(
     lookback_days: int = LOOKBACK_DAYS,
 ) -> list[Headline]:
     """
-    Collect recent graphene patents from the PatentsView API.
+    Collect recent graphene patents from the USPTO Open Data Portal API.
 
-    Executes multiple search queries (title phrase, abstract phrase, process
-    terms), deduplicates by patent_id, scores each patent for relevance to
-    watched companies, persists all results to patent_filings, and returns
-    Headline objects for high-relevance patents (relevance >= 7) for AI
-    evaluation.
+    Executes full-text search queries, deduplicates by patent number, scores
+    each patent for relevance to watched companies, persists all results to
+    patent_filings, and returns Headline objects for high-relevance patents
+    (relevance >= 7) for AI evaluation.
 
     Args:
         store: An open Store instance.
-        lookback_days: How many days back to look for newly published patents.
+        lookback_days: How many days back to look for newly granted patents.
 
     Returns:
         List of high-relevance patent headlines for AI evaluation.
     """
-    api_key = os.getenv("PATENTSVIEW_API_KEY", "")
+    api_key = os.getenv("USPTO_API_KEY", "")
     if not api_key:
         logger.info(
-            "[patents] PATENTSVIEW_API_KEY not set — skipping patent collection. "
-            "Register at https://search.patentsview.org/ to enable."
+            "[patents] USPTO_API_KEY not set — skipping patent collection. "
+            "Register free key at https://my.uspto.gov/user/api-key"
         )
         return []
 
@@ -371,14 +371,24 @@ async def collect_patents(
         raw_patents = await _fetch_patents_for_query(query, since_date, api_key)
 
         for patent in raw_patents:
-            patent_id: str = patent.get("patent_id", "")
+            # USPTO ODP field names differ from PatentsView legacy
+            patent_id: str = (
+                patent.get("patentNumber") or patent.get("patent_id", "")
+            )
             if not patent_id or patent_id in seen_patent_ids:
                 continue
             seen_patent_ids.add(patent_id)
 
-            title: str = patent.get("patent_title", "") or ""
-            patent_date: str = patent.get("patent_date", "") or ""
-            abstract: str = patent.get("patent_abstract", "") or ""
+            title: str = (
+                patent.get("inventionTitle") or patent.get("patent_title", "") or ""
+            )
+            patent_date: str = (
+                patent.get("grantDate") or patent.get("filingDate")
+                or patent.get("patent_date", "") or ""
+            )
+            abstract: str = (
+                patent.get("abstractText") or patent.get("patent_abstract", "") or ""
+            )
             assignee: str = _extract_assignee(patent)
 
             if not title:
