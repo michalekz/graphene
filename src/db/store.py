@@ -85,6 +85,17 @@ class SentimentScore:
 
 
 @dataclass
+class ShortInterest:
+    ticker: str
+    settlement_date: str  # ISO date string
+    current_si: int
+    previous_si: Optional[int]
+    change_pct: Optional[float]
+    days_to_cover: Optional[float]
+    avg_daily_vol: Optional[int]
+
+
+@dataclass
 class InsiderTrade:
     ticker: str
     insider_name: str
@@ -172,17 +183,25 @@ class Store:
         await self._db.commit()
         return row_id
 
-    async def get_unscored_headlines(self, limit: int = 100) -> list[dict]:
-        """Return headlines that haven't been evaluated yet."""
+    async def get_unscored_headlines(
+        self, limit: int = 100, max_age_days: int = 30
+    ) -> list[dict]:
+        """Return headlines that haven't been evaluated yet.
+
+        Articles older than *max_age_days* (by collected_at) are silently skipped
+        to avoid wasting API quota on stale content.
+        """
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
         async with self._db.execute(
             """
             SELECT id, url_hash, url, title, source, published_at, tickers, category, raw_content
             FROM headlines
             WHERE score IS NULL
+              AND collected_at >= ?
             ORDER BY collected_at ASC
             LIMIT ?
             """,
-            (limit,),
+            (cutoff, limit),
         ) as cur:
             rows = await cur.fetchall()
         return [dict(r) for r in rows]
@@ -441,12 +460,48 @@ class Store:
         )
         await self._db.commit()
 
+    # ── Short Interest ───────────────────────────────────────────────────────
+
+    async def upsert_short_interest(self, si: ShortInterest) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO short_interest
+                (ticker, settlement_date, current_si, previous_si, change_pct, days_to_cover, avg_daily_vol)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(ticker, settlement_date) DO UPDATE SET
+                current_si = excluded.current_si,
+                previous_si = excluded.previous_si,
+                change_pct = excluded.change_pct,
+                days_to_cover = excluded.days_to_cover,
+                avg_daily_vol = excluded.avg_daily_vol
+            """,
+            (
+                si.ticker, si.settlement_date, si.current_si, si.previous_si,
+                si.change_pct, si.days_to_cover, si.avg_daily_vol,
+            ),
+        )
+        await self._db.commit()
+
+    async def get_latest_short_interest(self, ticker: str) -> Optional[dict]:
+        """Most recent short interest record for *ticker*."""
+        async with self._db.execute(
+            """
+            SELECT * FROM short_interest
+            WHERE ticker = ?
+            ORDER BY settlement_date DESC
+            LIMIT 1
+            """,
+            (ticker,),
+        ) as cur:
+            row = await cur.fetchone()
+        return dict(row) if row else None
+
     # ── Stats ─────────────────────────────────────────────────────────────────
 
     async def get_db_stats(self) -> dict[str, Any]:
         stats: dict[str, Any] = {}
         for table in ["headlines", "prices", "sentiment_scores", "alerts_sent",
-                      "insider_trades", "patent_filings", "catalysts"]:
+                      "insider_trades", "patent_filings", "catalysts", "short_interest"]:
             async with self._db.execute(f"SELECT COUNT(*) FROM {table}") as cur:
                 row = await cur.fetchone()
                 stats[table] = row[0]

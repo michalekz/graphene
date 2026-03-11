@@ -149,19 +149,27 @@ async def _fetch_ticker_sentiment(ticker: str) -> SentimentScore | None:
     )
 
 
+async def _get_volume_trend(store: Store, ticker: str) -> dict[str, float | None]:
+    """Compare current volume against 7-day average from DB.
+
+    Returns a dict with keys: avg_7d, trend_pct (None when insufficient data).
+    """
+    rows = await store.get_latest_sentiment(ticker, hours=7 * 24)
+    st_rows = [r for r in rows if r["source"] == "stocktwits" and r["volume"] is not None]
+    if not st_rows:
+        return {"avg_7d": None, "trend_pct": None}
+    avg_7d = sum(r["volume"] for r in st_rows) / len(st_rows)
+    return {"avg_7d": round(avg_7d, 1), "trend_pct": None}  # trend_pct filled by caller
+
+
 async def collect_stocktwits_sentiment(store: Store) -> list[SentimentScore]:
     """Collect StockTwits sentiment for all primary tickers and persist to *store*.
 
-    Tickers are fetched sequentially to respect the StockTwits public-stream
-    rate limit (3 s between requests, enforced by the shared RateLimiter in
-    src.utils.http).
-
-    Args:
-        store: Open Store instance used to persist sentiment scores.
+    Extends each score with week-over-week volume trend analysis.
+    Tickers are fetched sequentially to respect the 3 s public-stream rate limit.
 
     Returns:
         List of SentimentScore dataclasses for tickers that returned data.
-        Returns an empty list on total failure.
     """
     results: list[SentimentScore] = []
 
@@ -176,6 +184,24 @@ async def collect_stocktwits_sentiment(store: Store) -> list[SentimentScore]:
             score_obj = await _fetch_ticker_sentiment(ticker)
             if score_obj is None:
                 continue
+
+            # Augment raw_data with volume trend vs last 7 days
+            try:
+                trend = await _get_volume_trend(store, ticker)
+                avg_7d = trend["avg_7d"]
+                if avg_7d is not None and avg_7d > 0:
+                    trend_pct = round((score_obj.volume - avg_7d) / avg_7d * 100, 1)
+                else:
+                    trend_pct = None
+                score_obj.raw_data["volume_avg_7d"] = avg_7d
+                score_obj.raw_data["volume_trend_pct"] = trend_pct
+                if trend_pct is not None:
+                    logger.info(
+                        "StockTwits %s volume trend: %.0f vs 7d avg %.0f (%+.0f%%)",
+                        ticker, score_obj.volume, avg_7d, trend_pct,
+                    )
+            except Exception as exc:
+                logger.warning("StockTwits trend calc failed for %s: %s", ticker, exc)
 
             try:
                 await store.insert_sentiment(score_obj)

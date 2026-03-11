@@ -141,6 +141,24 @@ CREATE INDEX IF NOT EXISTS idx_patent_date ON patent_filings(filing_date DESC);
 CREATE INDEX IF NOT EXISTS idx_patent_assignee ON patent_filings(assignee);
 
 -- ─────────────────────────────────────────────
+-- short_interest: FINRA OTC bi-monthly data
+-- ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS short_interest (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker          TEXT    NOT NULL,
+    settlement_date DATE    NOT NULL,
+    current_si      INTEGER,            -- current short interest (shares)
+    previous_si     INTEGER,            -- previous period short interest
+    change_pct      REAL,               -- % change vs previous
+    days_to_cover   REAL,               -- short interest / avg daily volume
+    avg_daily_vol   INTEGER,
+    collected_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(ticker, settlement_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_si_ticker_date ON short_interest(ticker, settlement_date DESC);
+
+-- ─────────────────────────────────────────────
 -- catalysts: manually tracked milestones
 -- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS catalysts (

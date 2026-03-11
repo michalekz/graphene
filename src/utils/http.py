@@ -33,6 +33,12 @@ DOMAIN_RATE_LIMITS: dict[str, float] = {
     "data.sec.gov": 0.1,             # SEC allows 10 req/s
     "search.patentsview.org": 1.0,
     "trends.google.com": 60.0,       # pytrends is very rate-limited
+    "api.finra.org": 2.0,            # FINRA public API — be polite
+    "app-money.tmx.com": 3.0,        # TMX Money GraphQL (SEDI insider data)
+    "blackswangraphene.com": 5.0,    # Company website RSS
+    "www.directa-plus.com": 5.0,     # Company website WP REST API
+    "www.hydrograph.co": 5.0,        # Company website
+    "www.sec.gov": 0.5,              # SEC general website (halts page)
     "default": 1.0,
 }
 

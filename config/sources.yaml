@@ -74,10 +74,34 @@ google_news:
     - '"graphene production" commercial'
     - "NanoXplore graphene"
     - "graphene investment 2026"
+    # Competitors and sector context
+    - '"Directa Plus" graphene OR RNS OR regulatory'
+    - '"Armadale Capital" graphene'
+    - '"First Graphene" ASX'
+    - '"Nano One" graphene'
+    - '"Zenyatta Ventures"'
+    - '"CVV" graphene battery'
   params:
     hl: en-US
     gl: US
     ceid: "US:en"
+
+# Direct company IR feeds (no API key required)
+company_feeds:
+  - ticker: BSWGF
+    name: Black Swan Graphene
+    type: rss
+    url: "https://blackswangraphene.com/feed/"
+    note: WordPress RSS — direct press releases, often hours before GlobeNewswire indexing
+
+  - ticker: DTPKF
+    name: Directa Plus
+    type: wp_rest
+    url: "https://www.directa-plus.com/wp-json/wp/v2/posts"
+    note: WordPress REST API — general news and announcements
+
+  # HydroGraph: hydrograph.co unreachable as of Mar 2026 — covered by Google News
+  # NanoXplore: nanoxplore.com — check periodically for RSS
 
 sentiment:
   - name: stocktwits

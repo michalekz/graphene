@@ -76,14 +76,52 @@ async def run_price_collector(store: Store) -> None:
 
 
 async def run_filing_collectors(store: Store) -> None:
-    """Run SEC EDGAR insider trades (daily)."""
+    """Run SEC EDGAR + SEDI insider trades (daily)."""
     from src.collectors.sec_edgar import collect_insider_trades
+    from src.collectors.sedi import collect_sedi_insider_trades
 
     try:
         trades, headlines = await collect_insider_trades(store)
         logger.info("EDGAR done", extra={"trades": len(trades), "headlines": len(headlines)})
     except Exception as e:
         logger.error("SEC EDGAR collector failed: %s", e)
+
+    try:
+        trades, headlines = await collect_sedi_insider_trades(store)
+        logger.info("SEDI done", extra={"trades": len(trades), "headlines": len(headlines)})
+    except Exception as e:
+        logger.error("SEDI collector failed: %s", e)
+
+
+async def run_company_news_collectors(store: Store) -> int:
+    """Run direct company IR / RSS collectors."""
+    from src.collectors.company_news import collect_company_news
+
+    try:
+        count = await collect_company_news(store)
+        logger.info("Company news done", extra={"new": count})
+        return count
+    except Exception as e:
+        logger.error("Company news collector failed: %s", e)
+        return 0
+
+
+async def run_market_data_collectors(store: Store) -> None:
+    """Run FINRA short interest + OTC tier monitoring (hourly)."""
+    from src.collectors.finra_short import collect_short_interest
+    from src.collectors.otc_markets import collect_otc_status
+
+    try:
+        records, headlines = await collect_short_interest(store)
+        logger.info("FINRA short interest done", extra={"records": len(records), "alerts": len(headlines)})
+    except Exception as e:
+        logger.error("FINRA short interest collector failed: %s", e)
+
+    try:
+        scores, headlines = await collect_otc_status(store)
+        logger.info("OTC tier monitoring done", extra={"tickers": len(scores), "alerts": len(headlines)})
+    except Exception as e:
+        logger.error("OTC Markets collector failed: %s", e)
 
 
 async def main(prices_only: bool = False, news_only: bool = False) -> None:
@@ -94,13 +132,20 @@ async def main(prices_only: bool = False, news_only: bool = False) -> None:
             await run_price_collector(store)
 
         if not prices_only:
+            from datetime import datetime
+            hour = datetime.now().hour
+
             total_news = await run_news_collectors(store)
+            total_news += await run_company_news_collectors(store)
             await run_sentiment_collectors(store)
 
-            # Run EDGAR only once per day (check hour)
-            from datetime import datetime
-            if datetime.now().hour in (8, 20):  # twice daily
+            # Run filing collectors twice daily (8:00 and 20:00 UTC)
+            if hour in (8, 20):
                 await run_filing_collectors(store)
+
+            # Run market data collectors every 4 hours
+            if hour % 4 == 0:
+                await run_market_data_collectors(store)
 
             logger.info("Collection complete", extra={"total_new_headlines": total_news})
 
