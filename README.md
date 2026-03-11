@@ -111,7 +111,7 @@ All configuration lives in `.env` (never commit this file). Copy `.env.example` 
 | `DEDUP_JACCARD_THRESHOLD` | No | Jaccard similarity threshold for dedup (default: `0.55`) |
 | `DASHBOARD_USER` | No | Web dashboard login username |
 | `DASHBOARD_PASSWORD` | No | Web dashboard login password |
-| `DASHBOARD_SECRET` | No | Flask session secret key |
+| `DASHBOARD_SECRET` | No | Flask session secret key — generate with: `python -c "import secrets; print(secrets.token_hex(32))"` |
 | `USPTO_API_KEY` | No | USPTO/PatentsView API key for patent tracking |
 | `REDDIT_CLIENT_ID` | No | Reddit app client ID (for sentiment collection) |
 | `REDDIT_CLIENT_SECRET` | No | Reddit app client secret |
@@ -165,24 +165,40 @@ tail -f /var/log/graphene-intel/evaluate.log
 
 ## Web Dashboard
 
-A Flask-based web dashboard (`web/app.py`) provides a browser interface for reviewing headlines, scores, prices, and alerts. It uses Bootstrap 5 and supports HTTPS.
+A Flask-based web dashboard ([web/app.py](web/app.py)) provides a browser interface for reviewing headlines, scores, prices, and alerts. Uses Bootstrap 5 dark theme with session-based login.
 
-**Deploying the dashboard:**
+**Rychlé spuštění (bez nginx):**
 
 ```bash
-# 1. Generate a self-signed TLS certificate
-bash deploy/gen_cert.sh
-
-# 2. Install and enable the systemd service
-cp deploy/dashboard.service /etc/systemd/system/
-systemctl enable --now dashboard
-
-# 3. Set up nginx reverse proxy
-cp deploy/nginx-dashboard.conf /etc/nginx/conf.d/
-systemctl reload nginx
+# Nainstaluj a spusť systemd service
+cp deploy/dashboard.service /etc/systemd/system/graphene-dashboard.service
+systemctl daemon-reload
+systemctl enable --now graphene-dashboard
 ```
 
-Access at `https://<server-ip>/` using the credentials set in `DASHBOARD_USER` / `DASHBOARD_PASSWORD`.
+Dashboard poběží na **`http://<IP>:5001`** — přihlášení přes `DASHBOARD_USER` / `DASHBOARD_PASSWORD` z `.env`.
+
+**Se správcem reverzní proxy (nginx + HTTPS):**
+
+```bash
+# 1. Vygeneruj self-signed TLS certifikát
+bash deploy/gen_cert.sh
+
+# 2. Nasaď nginx konfiguraci
+cp deploy/nginx-dashboard.conf /etc/nginx/conf.d/graphene-dashboard.conf
+nginx -t && systemctl reload nginx
+```
+
+Nginx přesměruje HTTP→HTTPS a proxuje provoz na `127.0.0.1:5001`. V tomto případě uprav `dashboard.service` tak, aby gunicorn poslouchal pouze na `127.0.0.1:5001` (ne na `0.0.0.0`).
+
+**Správa služby:**
+
+```bash
+systemctl status graphene-dashboard      # stav
+systemctl restart graphene-dashboard     # restart
+journalctl -u graphene-dashboard -f      # logy v reálném čase
+tail -f /var/log/graphene-intel/dashboard-access.log
+```
 
 ---
 

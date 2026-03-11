@@ -625,12 +625,39 @@ PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
 
 **Poznámka k logování:** `setup_logging()` v non-tty módu (cron) zapisuje **pouze do FileHandler** → žádná duplikace. V interaktivním terminálu přidává také stdout.
 
+### Web dashboard
+
+Dashboard běží jako systemd service na portu **5001**:
+
+```bash
+# Instalace a spuštění
+cp deploy/dashboard.service /etc/systemd/system/graphene-dashboard.service
+systemctl daemon-reload
+systemctl enable --now graphene-dashboard
+
+# Dostupný na: http://<IP>:5001
+# Přihlášení: DASHBOARD_USER / DASHBOARD_PASSWORD z .env
+```
+
+Správa:
+```bash
+systemctl status graphene-dashboard
+systemctl restart graphene-dashboard
+journalctl -u graphene-dashboard -f
+```
+
+`DASHBOARD_SECRET` musí být nastaveno v `.env` — náhodný tajný klíč pro podepisování session cookies:
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
 ### Monitorování
 
 ```bash
 # Sledování živých logů
 tail -f /var/log/graphene-intel/collect.log
 tail -f /var/log/graphene-intel/evaluate.log
+tail -f /var/log/graphene-intel/dashboard-access.log
 
 # Stav databáze
 .venv/bin/python -c "
