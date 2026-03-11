@@ -96,6 +96,29 @@ class ShortInterest:
 
 
 @dataclass
+class PortfolioPosition:
+    ticker: str
+    report_date: str          # ISO date string, e.g. "2026-03-10"
+    quantity: Optional[float]
+    mark_price: Optional[float]
+    position_value: Optional[float]
+    cost_basis_price: Optional[float]
+    cost_basis_money: Optional[float]
+    unrealized_pnl: Optional[float]
+    side: Optional[str]
+    currency: Optional[str] = "USD"
+    description: Optional[str] = None
+    asset_category: Optional[str] = None
+    listing_exchange: Optional[str] = None
+
+    @property
+    def pnl_pct(self) -> Optional[float]:
+        if self.cost_basis_money and self.cost_basis_money != 0 and self.unrealized_pnl is not None:
+            return self.unrealized_pnl / self.cost_basis_money * 100.0
+        return None
+
+
+@dataclass
 class InsiderTrade:
     ticker: str
     insider_name: str
@@ -496,12 +519,105 @@ class Store:
             row = await cur.fetchone()
         return dict(row) if row else None
 
+    # ── Portfolio Positions ──────────────────────────────────────────────────
+
+    async def upsert_portfolio_position(self, p: PortfolioPosition) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO portfolio_positions
+                (ticker, description, asset_category, listing_exchange, quantity,
+                 mark_price, position_value, cost_basis_price, cost_basis_money,
+                 unrealized_pnl, side, currency, report_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(ticker, report_date) DO UPDATE SET
+                quantity = excluded.quantity,
+                mark_price = excluded.mark_price,
+                position_value = excluded.position_value,
+                cost_basis_price = excluded.cost_basis_price,
+                cost_basis_money = excluded.cost_basis_money,
+                unrealized_pnl = excluded.unrealized_pnl,
+                side = excluded.side
+            """,
+            (
+                p.ticker, p.description, p.asset_category, p.listing_exchange,
+                p.quantity, p.mark_price, p.position_value, p.cost_basis_price,
+                p.cost_basis_money, p.unrealized_pnl, p.side, p.currency, p.report_date,
+            ),
+        )
+        await self._db.commit()
+
+    async def get_latest_position(self, ticker: str) -> Optional[PortfolioPosition]:
+        """Most recent portfolio position for *ticker*, or None if not held."""
+        async with self._db.execute(
+            """
+            SELECT * FROM portfolio_positions
+            WHERE ticker = ?
+            ORDER BY report_date DESC
+            LIMIT 1
+            """,
+            (ticker,),
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        return PortfolioPosition(
+            ticker=d["ticker"],
+            report_date=d["report_date"],
+            quantity=d["quantity"],
+            mark_price=d["mark_price"],
+            position_value=d["position_value"],
+            cost_basis_price=d["cost_basis_price"],
+            cost_basis_money=d["cost_basis_money"],
+            unrealized_pnl=d["unrealized_pnl"],
+            side=d["side"],
+            currency=d["currency"],
+            description=d["description"],
+            asset_category=d["asset_category"],
+            listing_exchange=d["listing_exchange"],
+        )
+
+    async def get_all_positions(self) -> list[PortfolioPosition]:
+        """All current positions (one per ticker, most recent report_date)."""
+        async with self._db.execute(
+            """
+            SELECT p.*
+            FROM portfolio_positions p
+            INNER JOIN (
+                SELECT ticker, MAX(report_date) AS max_date
+                FROM portfolio_positions
+                GROUP BY ticker
+            ) latest ON p.ticker = latest.ticker AND p.report_date = latest.max_date
+            ORDER BY p.position_value DESC
+            """,
+        ) as cur:
+            rows = await cur.fetchall()
+        result = []
+        for d in [dict(r) for r in rows]:
+            result.append(PortfolioPosition(
+                ticker=d["ticker"],
+                report_date=d["report_date"],
+                quantity=d["quantity"],
+                mark_price=d["mark_price"],
+                position_value=d["position_value"],
+                cost_basis_price=d["cost_basis_price"],
+                cost_basis_money=d["cost_basis_money"],
+                unrealized_pnl=d["unrealized_pnl"],
+                side=d["side"],
+                currency=d["currency"],
+                description=d["description"],
+                asset_category=d["asset_category"],
+                listing_exchange=d["listing_exchange"],
+            ))
+        return result
+
     # ── Stats ─────────────────────────────────────────────────────────────────
 
     async def get_db_stats(self) -> dict[str, Any]:
         stats: dict[str, Any] = {}
         for table in ["headlines", "prices", "sentiment_scores", "alerts_sent",
-                      "insider_trades", "patent_filings", "catalysts", "short_interest"]:
+                      "insider_trades", "patent_filings", "catalysts", "short_interest",
+                      "portfolio_positions"]:
             async with self._db.execute(f"SELECT COUNT(*) FROM {table}") as cur:
                 row = await cur.fetchone()
                 stats[table] = row[0]

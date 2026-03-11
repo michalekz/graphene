@@ -106,6 +106,17 @@ async def run_company_news_collectors(store: Store) -> int:
         return 0
 
 
+async def run_portfolio_collector(store: Store) -> None:
+    """Sync IBKR portfolio positions once daily."""
+    from src.collectors.ibkr_flex import collect_ibkr_positions
+
+    try:
+        positions = await collect_ibkr_positions(store)
+        logger.info("IBKR portfolio synced", extra={"positions": len(positions)})
+    except Exception as e:
+        logger.error("IBKR portfolio collector failed: %s", e)
+
+
 async def run_market_data_collectors(store: Store) -> None:
     """Run FINRA short interest + OTC tier monitoring (hourly)."""
     from src.collectors.finra_short import collect_short_interest
@@ -146,6 +157,10 @@ async def main(prices_only: bool = False, news_only: bool = False) -> None:
             # Run market data collectors every 4 hours
             if hour % 4 == 0:
                 await run_market_data_collectors(store)
+
+            # Sync IBKR portfolio once daily at 20:00 UTC
+            if hour == 20:
+                await run_portfolio_collector(store)
 
             logger.info("Collection complete", extra={"total_new_headlines": total_news})
 

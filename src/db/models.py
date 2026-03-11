@@ -159,6 +159,30 @@ CREATE TABLE IF NOT EXISTS short_interest (
 CREATE INDEX IF NOT EXISTS idx_si_ticker_date ON short_interest(ticker, settlement_date DESC);
 
 -- ─────────────────────────────────────────────
+-- portfolio_positions: IBKR Flex Query snapshot
+-- ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS portfolio_positions (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker              TEXT    NOT NULL,
+    description         TEXT,
+    asset_category      TEXT,
+    listing_exchange    TEXT,
+    quantity            REAL,
+    mark_price          REAL,
+    position_value      REAL,
+    cost_basis_price    REAL,
+    cost_basis_money    REAL,
+    unrealized_pnl      REAL,
+    side                TEXT,
+    currency            TEXT,
+    report_date         DATE    NOT NULL,
+    collected_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(ticker, report_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_portfolio_ticker ON portfolio_positions(ticker, report_date DESC);
+
+-- ─────────────────────────────────────────────
 -- catalysts: manually tracked milestones
 -- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS catalysts (

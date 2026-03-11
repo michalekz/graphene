@@ -174,7 +174,22 @@ class TelegramNotifier:
             True if the message was sent successfully, False otherwise.
         """
         try:
-            text = formatter.format_instant_alert(headline)
+            # Attach portfolio context if the headline concerns a held ticker
+            portfolio_position = None
+            tickers_raw = headline.get("tickers") or []
+            if isinstance(tickers_raw, str):
+                import json as _json
+                try:
+                    tickers_raw = _json.loads(tickers_raw)
+                except Exception:
+                    tickers_raw = []
+            for tkr in tickers_raw:
+                pos = await store.get_latest_position(tkr)
+                if pos and pos.quantity:
+                    portfolio_position = pos
+                    break
+
+            text = formatter.format_instant_alert(headline, portfolio_position=portfolio_position)
             chash = _content_hash(text)
 
             if await store.alert_already_sent(chash):

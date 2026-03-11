@@ -14,6 +14,7 @@ import logging
 from typing import Optional
 
 from src.evaluator.anomaly import PriceAnomaly
+from src.db.store import PortfolioPosition
 
 logger = logging.getLogger(__name__)
 
@@ -115,9 +116,24 @@ def _sentiment_label(sentiment: str) -> str:
 
 # ── Public formatters ──────────────────────────────────────────────────────────
 
+def _format_portfolio_line(pos: PortfolioPosition) -> str:
+    """Single-line portfolio context: 💼 7 600 ks @ $1.99 | $62 700 | P&L +$47 614 (+315%)"""
+    qty = f"{pos.quantity:,.0f}" if pos.quantity is not None else "?"
+    avg = f"${pos.cost_basis_price:.2f}" if pos.cost_basis_price is not None else "?"
+    val = f"${pos.position_value:,.0f}" if pos.position_value is not None else "?"
+    pnl = ""
+    if pos.unrealized_pnl is not None:
+        sign = "+" if pos.unrealized_pnl >= 0 else ""
+        pnl = f" | P&amp;L <b>{sign}${pos.unrealized_pnl:,.0f}</b>"
+        if pos.pnl_pct is not None:
+            pnl += f" ({sign}{pos.pnl_pct:.0f}%)"
+    return f"💼 Pozice: {qty} ks @ {avg} | {val}{pnl}"
+
+
 def format_instant_alert(
     headline: dict,
     anomaly: Optional[PriceAnomaly] = None,
+    portfolio_position: Optional[PortfolioPosition] = None,
 ) -> str:
     """
     Format a single high-score headline for an instant Telegram alert.
@@ -178,6 +194,10 @@ def format_instant_alert(
         lines.append(f'{EMOJI_LINK} <a href="{_esc(url)}">Zdroj: {source}</a>')
     else:
         lines.append(f"{EMOJI_LINK} Zdroj: {source}")
+
+    # Portfolio context (if ticker is in our portfolio)
+    if portfolio_position is not None:
+        lines.append(_format_portfolio_line(portfolio_position))
 
     # Flags / sentiment footer
     footer_parts: list[str] = []
