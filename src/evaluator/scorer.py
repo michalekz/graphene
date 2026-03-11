@@ -25,6 +25,8 @@ import logging
 import os
 from typing import Any, Optional
 
+from datetime import datetime, timezone
+
 from src.db.store import EvaluationResult, Store
 from src.evaluator.context import build_full_context
 from src.evaluator.prompts import (
@@ -95,12 +97,13 @@ def _call_llm(system: str, user: str) -> str:
 
 # ── Prompt helpers ────────────────────────────────────────────────────────────
 
-def _build_prompt(headline: dict, context: dict[str, str]) -> str:
+def _build_prompt(headline: dict, context: dict[str, str], today: str) -> str:
     snippet = (headline.get("raw_content") or "")[:MAX_CONTENT_SNIPPET]
     return HEADLINE_SCORING_USER.format(
         tickers_context=context["tickers_context"],
         sector_context=context["sector_context"],
         catalysts_context=context["catalysts_context"],
+        today=today,
         title=headline["title"],
         source=headline["source"],
         published_at=headline.get("published_at") or "unknown",
@@ -189,11 +192,12 @@ async def score_headlines(store: Store, batch_size: int = BATCH_SIZE) -> list[di
 
     alert_threshold = int(os.getenv("ALERT_THRESHOLD", "7"))
     high_score_items: list[dict] = []
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     for headline in headlines:
         url_hash = headline["url_hash"]
         try:
-            prompt = _build_prompt(headline, context)
+            prompt = _build_prompt(headline, context, today)
             response_text = _call_llm(HEADLINE_SCORING_SYSTEM, prompt)
             data = _parse_response(response_text)
             if not data:

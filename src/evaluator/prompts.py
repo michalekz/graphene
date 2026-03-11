@@ -12,20 +12,29 @@ from __future__ import annotations
 # Headline scoring prompt (Claude Haiku)
 # ─────────────────────────────────────────────────────────────────────────────
 
-HEADLINE_SCORING_SYSTEM = """You are a graphene sector equity analyst monitoring small-cap stocks.
-Your job: evaluate news headlines for significance to these watched companies and score them 1-10.
+HEADLINE_SCORING_SYSTEM = """You are a strict graphene sector equity analyst. You score headlines 1-10 for alert-worthiness.
 
-Respond ONLY with valid JSON, no markdown, no explanation outside the JSON object."""
+CALIBRATION RULE: Most headlines are noise. Expected distribution:
+  ~50% → score 1-4  (noise, old news, generic research)
+  ~30% → score 5-6  (interesting context, not actionable today)
+  ~15% → score 7-8  (significant — alert worthy)
+  ~5%  → score 9-10 (critical — rare, only genuine game-changers)
 
-HEADLINE_SCORING_USER = """WATCHED TICKERS:
+If you are tempted to give a 7+, ask yourself: "Would a fund manager act on this TODAY?"
+If no → score 5-6 at most.
+
+Respond ONLY with valid JSON. No markdown, no text outside the JSON object."""
+
+HEADLINE_SCORING_USER = """PRIMARY TICKERS (HGRAF = HydroGraph, BSWGF = Black Swan Graphene):
 {tickers_context}
 
-SECTOR CONTEXT (latest prices & sentiment):
+SECTOR CONTEXT:
 {sector_context}
 
 UPCOMING CATALYSTS:
 {catalysts_context}
 
+TODAY'S DATE: {today}
 ---
 Evaluate this headline:
 Title: {title}
@@ -33,59 +42,39 @@ Source: {source}
 Published: {published_at}
 Content snippet: {content_snippet}
 
-Score 1-10 where:
-1-3: Routine, irrelevant, or duplicate noise — do not alert
-4-6: Mildly interesting, not immediately actionable
-7-8: Significant — material news that could move price in next 1-3 days
-9-10: Critical — major catalyst or major red flag
+SCORING RULES — apply strictly:
 
-SCORE 9-10 for:
-- NASDAQ listing application filed or confirmed
-- Named customer / named revenue contract announced
-- Major insider selling (>$50K value)
-- Going concern warning in filing
-- Management departure (CEO/CFO)
-- Reverse split announcement
-- SEC/OSC regulatory enforcement action
-- Emergency fundraising (>30% dilution signal)
-- Paid stock promotion detected
+STALENESS PENALTY: If the headline was published more than 14 days before today ({today}) → cap score at 5 maximum.
+(Old news is already priced in and not actionable.)
 
-SCORE 8-9 for:
-- Named strategic partner announced (with verifiable company name)
-- Revenue milestone announced
-- Regulatory approval for new application (EPA, FDA, REACH)
-- Major patent granted (to watched company)
-- NASDAQ listing process update
-- Significant insider buying (>$25K)
-- Competitor going concern or major negative (sector sentiment impact)
+TIER 1 — PRIMARY TICKERS (HGRAF, BSWGF) direct news:
+  9-10: NASDAQ filing confirmed | Named revenue-generating customer (verifiable company, not vague "partner") | Going concern warning | CEO/CFO departure | Reverse split | SEC/OSC enforcement | Paid promotion detected | Emergency dilution >25%
+  8:    Production capacity milestone with specific numbers | Capital raise >C$5M | Major patent granted | Significant insider buy/sell >$25K | Named partner with commercial contract details
+  7:    CFO/board appointment | Minor capacity or R&D update | Named application in new industry | Analyst coverage initiated with target price
 
-SCORE 7-8 for:
-- Positive production/capacity milestone
-- Conference presentation with new data
-- Government grant awarded
-- Meaningful analyst coverage initiated
-- Volume/price anomaly with news catalyst
+TIER 2 — COMPETITOR news (NNXPF, GMGMF, ZTEK, etc.) — always score 2 points LOWER than Tier 1 equivalent:
+  7:    Competitor going concern, reverse split, or major negative (sector contagion risk)
+  5-6:  Competitor partnership, capacity expansion, capital raise (sector signal only)
+  3-4:  Competitor routine update
 
-SCORE 4-6 for:
-- Routine press release (participation in event, minor update)
-- General graphene research paper (no direct commercial application)
-- Competitor minor news with indirect sector implications
+TIER 3 — General graphene research, ETF moves, commodity prices:
+  4-5:  Directly relevant to commercialization (e.g., new battery application breakthrough)
+  1-3:  Academic paper, general industry trend, no ticker impact
 
-SCORE 1-3 for:
-- Already evaluated similar story (different source, same facts)
-- Unrelated company with "graphene" in name
-- Generic market commentary with no company-specific info
-- Social media speculation without factual basis
+AUTOMATIC SCORE 1-2 for:
+  - Same story already covered from a different source
+  - No specific ticker information, pure generic commentary
+  - Social media speculation without cited facts
 
 Respond with ONLY this JSON (no markdown, no extra text):
 {{
   "score": <integer 1-10>,
   "sentiment": "<bullish|bearish|neutral>",
-  "impact_summary": "<1 concise sentence explaining why this score, max 120 chars>",
+  "impact_summary": "<1 concise sentence explaining score, max 120 chars>",
   "affected_tickers": ["<ticker1>", ...],
   "is_red_flag": <true|false>,
   "is_pump_suspect": <true|false>,
-  "reasoning": "<2-3 sentences of analysis, not shown to user but used for calibration>"
+  "reasoning": "<why this tier and score, max 2 sentences>"
 }}"""
 
 
