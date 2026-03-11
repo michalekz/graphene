@@ -37,7 +37,13 @@ class JsonFormatter(logging.Formatter):
 def setup_logging(component: str = "graphene-intel") -> logging.Logger:
     """
     Configure root logger + component logger.
-    Outputs to stdout (for systemd/journald) and optionally to file.
+
+    Routing strategy avoids double-writing to log files:
+    - Interactive terminal (tty): stdout + file (developer sees live output).
+    - Non-interactive (cron, nohup): file only — prevents duplicate lines
+      when cron also redirects stdout to the same log file via >> logfile 2>&1.
+
+    If LOG_DIR is not set and we're non-interactive, falls back to stdout.
     """
     root = logging.getLogger()
     root.setLevel(LOG_LEVEL)
@@ -45,12 +51,9 @@ def setup_logging(component: str = "graphene-intel") -> logging.Logger:
     # Remove any existing handlers (avoid duplicates on re-import)
     root.handlers.clear()
 
-    # Stdout handler (always)
-    sh = logging.StreamHandler(sys.stdout)
-    sh.setFormatter(JsonFormatter())
-    root.addHandler(sh)
+    is_tty = sys.stdout.isatty()
+    file_handler_added = False
 
-    # File handler (if LOG_DIR is writable)
     if LOG_DIR:
         try:
             os.makedirs(LOG_DIR, exist_ok=True)
@@ -58,9 +61,15 @@ def setup_logging(component: str = "graphene-intel") -> logging.Logger:
             fh = logging.FileHandler(log_file)
             fh.setFormatter(JsonFormatter())
             root.addHandler(fh)
+            file_handler_added = True
         except OSError:
-            # Not critical — continue with stdout only
             pass
+
+    # Add stdout handler when interactive (tty) OR when no file handler available
+    if is_tty or not file_handler_added:
+        sh = logging.StreamHandler(sys.stdout)
+        sh.setFormatter(JsonFormatter())
+        root.addHandler(sh)
 
     logger = logging.getLogger(component)
     logger.info("Logging initialized", extra={"component": component, "level": LOG_LEVEL})

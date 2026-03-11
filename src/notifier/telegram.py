@@ -22,6 +22,7 @@ from typing import Optional
 from src.db.store import Store
 from src.evaluator.anomaly import PriceAnomaly
 from src.notifier import formatter
+from src.utils.dedup import is_duplicate
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +183,18 @@ class TelegramNotifier:
                     headline.get("id"),
                 )
                 return False
+
+            # Semantic deduplication: skip if a similar story was already alerted
+            title = headline.get("title", "")
+            if title:
+                recent_titles = await store.get_recent_alert_titles(hours=6)
+                if is_duplicate(title, recent_titles):
+                    logger.info(
+                        "Duplicate story suppressed: headline_id=%s title=%r",
+                        headline.get("id"),
+                        title[:80],
+                    )
+                    return False
 
             msg_id = await self.send_message(text)
             if msg_id is None:

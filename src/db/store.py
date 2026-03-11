@@ -367,6 +367,27 @@ class Store:
         ) as cur:
             return await cur.fetchone() is not None
 
+    async def get_recent_alert_titles(self, hours: int = 6) -> list[str]:
+        """Return headline titles of all instant alerts sent in the last *hours* hours.
+
+        Used for Jaccard-based semantic deduplication: before sending an alert,
+        check if the candidate title is too similar to one already sent.
+        """
+        since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        async with self._db.execute(
+            """
+            SELECT h.title
+            FROM alerts_sent a
+            JOIN headlines h ON a.headline_id = h.id
+            WHERE a.alert_type = 'instant'
+              AND a.sent_at >= ?
+            ORDER BY a.sent_at DESC
+            """,
+            (since,),
+        ) as cur:
+            rows = await cur.fetchall()
+        return [row[0] for row in rows if row[0]]
+
     # ── Insider Trades ───────────────────────────────────────────────────────
 
     async def insert_insider_trade(self, t: InsiderTrade) -> Optional[int]:
