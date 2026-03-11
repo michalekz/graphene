@@ -1,11 +1,11 @@
 """
 Message formatter for Telegram notifications.
 
-All output uses standard Markdown (parse_mode="Markdown"), which supports:
-  *bold*, _italic_, `code`, [text](url)
+All output uses HTML (parse_mode="HTML"), which supports:
+  <b>bold</b>, <i>italic</i>, <code>code</code>, <a href="url">text</a>
 
-Dynamic content that may contain special Markdown characters is escaped
-before embedding into formatted strings.
+Dynamic content is HTML-escaped (&, <, >) before embedding.
+HTML is more reliable than Markdown — no risk of unmatched * or _ entities.
 """
 
 from __future__ import annotations
@@ -66,20 +66,15 @@ _ANOMALY_INSIGHTS: dict[str, str] = {
 
 # ── Escaping helpers ───────────────────────────────────────────────────────────
 
-def _escape_md(text: str) -> str:
-    """
-    Escape characters that have special meaning in Telegram's standard Markdown.
-
-    Standard Markdown (parse_mode="Markdown") only requires escaping of:
-      `  *  _  [
-    within non-formatted regions.  We also escape ] for symmetry.
-    """
+def _esc(text: str) -> str:
+    """Escape HTML entities in dynamic content for Telegram HTML parse_mode."""
     if not text:
         return text
-    # Order matters: escape backslash first to avoid double-escaping
-    for ch in ("\\", "`", "*", "_", "[", "]"):
-        text = text.replace(ch, f"\\{ch}")
-    return text
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+# Keep old name as alias so any external callers still work
+_escape_md = _esc
 
 
 # ── Score helpers ──────────────────────────────────────────────────────────────
@@ -169,7 +164,7 @@ def format_instant_alert(
     lines: list[str] = []
 
     # Header line: alert emoji + tickers in bold + score + sentiment colour
-    lines.append(f"{alert_emoji} *{_escape_md(ticker_str)}* — Skóre: {score}/10 {sent_emoji}")
+    lines.append(f"{alert_emoji} <b>{_esc(ticker_str)}</b> — Skóre: {score}/10 {sent_emoji}")
 
     # Headline title
     lines.append(f"{EMOJI_NEWS} {title}")
@@ -180,7 +175,7 @@ def format_instant_alert(
 
     # Source link
     if url:
-        lines.append(f"{EMOJI_LINK} [Zdroj: {source}]({url})")
+        lines.append(f'{EMOJI_LINK} <a href="{_esc(url)}">Zdroj: {source}</a>')
     else:
         lines.append(f"{EMOJI_LINK} Zdroj: {source}")
 
@@ -196,7 +191,7 @@ def format_instant_alert(
     # Optional anomaly context
     if anomaly is not None:
         label = _ANOMALY_LABELS.get(anomaly.anomaly_type, anomaly.anomaly_type.replace("_", " ").title())
-        lines.append(f"{EMOJI_ANOMALY} *{label}*: {_escape_md(anomaly.details)}")
+        lines.append(f"{EMOJI_ANOMALY} <b>{_esc(label)}</b>: {_esc(anomaly.details)}")
 
     message = "\n".join(lines)
 
@@ -231,14 +226,14 @@ def format_anomaly_alert(anomaly: PriceAnomaly) -> str:
         anomaly.anomaly_type,
         anomaly.anomaly_type.replace("_", " ").title(),
     )
-    ticker = _escape_md(anomaly.ticker)
-    details = _escape_md(anomaly.details)
-    insight = _escape_md(
-        _ANOMALY_INSIGHTS.get(anomaly.anomaly_type, "Review position and recent news")
+    ticker = _esc(anomaly.ticker)
+    details = _esc(anomaly.details)
+    insight = _esc(
+        _ANOMALY_INSIGHTS.get(anomaly.anomaly_type, "Zkontrolujte pozici a aktuální zprávy")
     )
 
     lines: list[str] = [
-        f"{EMOJI_ANOMALY} *{_escape_md(label)}* — {ticker}",
+        f"{EMOJI_ANOMALY} <b>{_esc(label)}</b> — {ticker}",
         f"{EMOJI_PRICE} {details}",
         f"{EMOJI_INSIGHT} {insight}",
     ]
@@ -277,7 +272,7 @@ def format_daily_summary(
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     header = (
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📊 *DENNÍ SOUHRN — {date_str}*\n"
+        f"📊 <b>DENNÍ SOUHRN — {date_str}</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     )
 
@@ -290,15 +285,15 @@ def format_daily_summary(
 
     # Price overview
     if prices:
-        price_lines: list[str] = [f"\n{EMOJI_PRICE} *Ceny*"]
+        price_lines: list[str] = [f"\n{EMOJI_PRICE} <b>Ceny</b>"]
         for p in prices[:15]:  # cap at 15 rows
-            ticker = _escape_md(str(p.get("ticker") or ""))
+            ticker = _esc(str(p.get("ticker") or ""))
             close = p.get("close")
             chg = p.get("change_pct")
             vol_ratio = p.get("volume_ratio")
             if close is None:
                 continue
-            line = f"  • *{ticker}* ${close:.4f}"
+            line = f"  • <b>{ticker}</b> ${close:.4f}"
             if chg is not None:
                 sent_em = EMOJI_BULLISH if chg >= 0 else EMOJI_BEARISH
                 line += f" ({chg:+.1f}%) {sent_em}"
@@ -309,49 +304,49 @@ def format_daily_summary(
 
     # Top headlines
     if headlines:
-        hl_lines: list[str] = [f"\n{EMOJI_NEWS} *Top zprávy*"]
+        hl_lines: list[str] = [f"\n{EMOJI_NEWS} <b>Top zprávy</b>"]
         for h in headlines[:10]:
             score = int(h.get("score") or 0)
-            title = _escape_md(str(h.get("title") or ""))
-            url = str(h.get("url") or "")
+            title = _esc(str(h.get("title") or ""))
+            url = _esc(str(h.get("url") or ""))
             sent_em = _sentiment_emoji(str(h.get("sentiment") or "neutral"))
             em = _score_emoji(score)
             if url:
-                hl_lines.append(f"  {em} [{title}]({url}) {sent_em} ({score}/10)")
+                hl_lines.append(f'  {em} <a href="{url}">{title}</a> {sent_em} ({score}/10)')
             else:
                 hl_lines.append(f"  {em} {title} {sent_em} ({score}/10)")
         sections.append("\n".join(hl_lines))
 
     # Anomalies
     if anomalies:
-        an_lines: list[str] = [f"\n{EMOJI_ANOMALY} *Anomálie*"]
+        an_lines: list[str] = [f"\n{EMOJI_ANOMALY} <b>Anomálie</b>"]
         for a in anomalies:
             label = _ANOMALY_LABELS.get(a.anomaly_type, a.anomaly_type)
             an_lines.append(
-                f"  {EMOJI_ANOMALY} *{_escape_md(a.ticker)}* — {_escape_md(label)}: "
-                f"{_escape_md(a.details)}"
+                f"  {EMOJI_ANOMALY} <b>{_esc(a.ticker)}</b> — {_esc(label)}: "
+                f"{_esc(a.details)}"
             )
         sections.append("\n".join(an_lines))
 
     # Sentiment snapshot
     if sentiment:
-        sent_lines: list[str] = [f"\n{EMOJI_INSIGHT} *Sentiment*"]  # Sentiment — stejné v češtině
+        sent_lines: list[str] = [f"\n{EMOJI_INSIGHT} <b>Sentiment</b>"]
         for ticker, scores in sentiment.items():
             if not scores:
                 continue
             avg = sum(s.get("score", 0) for s in scores) / len(scores)
             em = EMOJI_BULLISH if avg > 0.1 else (EMOJI_BEARISH if avg < -0.1 else EMOJI_NEUTRAL)
-            sent_lines.append(f"  • *{_escape_md(ticker)}* {avg:+.2f} {em}")
+            sent_lines.append(f"  • <b>{_esc(ticker)}</b> {avg:+.2f} {em}")
         sections.append("\n".join(sent_lines))
 
     # Pending catalysts
     if catalysts:
-        cat_lines: list[str] = [f"\n{EMOJI_CATALYST} *Nadcházející katalyzátory*"]
+        cat_lines: list[str] = [f"\n{EMOJI_CATALYST} <b>Nadcházející katalyzátory</b>"]
         for c in catalysts[:5]:
-            ticker = _escape_md(str(c.get("ticker") or ""))
-            desc = _escape_md(str(c.get("description") or ""))
-            exp = str(c.get("expected_date") or "TBD")
-            cat_lines.append(f"  {EMOJI_CATALYST} *{ticker}* — {desc} (by {_escape_md(exp)})")
+            ticker = _esc(str(c.get("ticker") or ""))
+            desc = _esc(str(c.get("description") or ""))
+            exp = _esc(str(c.get("expected_date") or "TBD"))
+            cat_lines.append(f"  {EMOJI_CATALYST} <b>{ticker}</b> — {desc} (do {exp})")
         sections.append("\n".join(cat_lines))
 
     full_text = "\n".join(sections).strip()
@@ -379,7 +374,7 @@ def format_weekly_report(ai_report: str) -> list[str]:
     week_str = datetime.now(timezone.utc).strftime("t. %d. %m. %Y")
     header = (
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📈 *TÝDENNÍ REPORT — {week_str}*\n"
+        f"📈 <b>TÝDENNÍ REPORT — {week_str}</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     )
     full_text = header + ai_report.strip()

@@ -14,6 +14,7 @@ dependencies = [
     "yfinance>=0.2",                # Stock price/volume data
     "praw>=7.7",                    # Reddit API
     "pytrends>=4.9",                # Google Trends (unofficial API)
+    "urllib3<2",                    # pytrends incompatible with urllib3 2.x (method_whitelist removed)
     "python-telegram-bot>=21",      # Telegram Bot API
     "pyyaml>=6.0",                  # Config file parsing
     "python-dotenv>=1.0",           # .env file loading
