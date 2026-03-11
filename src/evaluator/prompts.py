@@ -82,130 +82,130 @@ Respond with ONLY this JSON (no markdown, no extra text):
 # Daily summary prompt (Claude Sonnet)
 # ─────────────────────────────────────────────────────────────────────────────
 
-DAILY_SUMMARY_SYSTEM = """You are a senior graphene sector analyst providing a concise daily briefing.
-Format your response as a structured Telegram message using Markdown (Bold, italic, bullet points).
-Keep it factual, actionable, and under 3000 characters total.
-Focus on what matters for investment decisions. No fluff."""
+DAILY_SUMMARY_SYSTEM = """Jsi senior analytik grafenového sektoru. Píšeš stručný denní přehled v češtině.
+Formát: strukturovaná Telegram zpráva v Markdownu (tučně, kurzíva, odrážky).
+Styl: věcný, srozumitelný, orientovaný na investiční rozhodnutí. Bez zbytečných frází.
+Celková délka: max 3000 znaků."""
 
-DAILY_SUMMARY_USER = """Generate a daily briefing for {date} based on this data:
+DAILY_SUMMARY_USER = """Vytvoř denní přehled pro {date} na základě těchto dat:
 
-PRICE OVERVIEW:
+PŘEHLED CEN:
 {prices_table}
 
-TOP HEADLINES (last 24h, scored by AI):
+TOP ZPRÁVY (posledních 24h, hodnocení AI):
 {headlines_list}
 
-PRICE/VOLUME ANOMALIES:
+CENOVÉ/OBJEMOVÉ ANOMÁLIE:
 {anomalies_list}
 
-SOCIAL SENTIMENT:
+SOCIÁLNÍ SENTIMENT:
 {sentiment_summary}
 
-UPCOMING CATALYSTS:
+NADCHÁZEJÍCÍ KATALYZÁTORY:
 {catalysts_list}
 
 ---
-Structure your response EXACTLY as:
+Struktura odpovědi (PŘESNĚ takto):
 
-📊 *Daily Graphene Intel — {date}*
+📊 *Denní přehled grafenového sektoru — {date}*
 
-*Price Overview*
-[table: ticker | price | change% | vol ratio]
+*Ceny*
+[tabulka: ticker | cena | změna% | objem/průměr]
 
-*Top Stories*
-[bullets: score + 1-line summary + source]
+*Top zprávy*
+[odrážky: skóre + 1-větový souhrn + zdroj]
 
-*Anomalies & Signals*
-[only if any; else omit section]
+*Anomálie & signály*
+[jen pokud existují; jinak sekci vynech]
 
-*Social Sentiment*
-[1-2 lines on StockTwits/Reddit buzz]
+*Sentiment*
+[1-2 věty o náladě na StockTwits/Reddit]
 
-*Upcoming Catalysts*
-[bullets: date | ticker | event]
+*Nadcházející katalyzátory*
+[odrážky: datum | ticker | událost]
 
-*Valuation Context*
-HGRAF mkt cap ~$Xm on $YK revenue = Xk× revenue multiple. NanoXplore (sector leader with real revenue): ~2.5× revenue.
+*Valuační kontext*
+HGRAF tržní kap. ~$Xm vs $YK revenue = Xk× revenue multiple. NanoXplore (sektorový lídr s reálnými tržbami): ~2,5× revenue.
 
-Keep total length under 3000 characters."""
+Celková délka max 3000 znaků."""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Weekly deep report prompt (Claude Sonnet)
 # ─────────────────────────────────────────────────────────────────────────────
 
-WEEKLY_REPORT_SYSTEM = """You are a senior graphene sector analyst writing a comprehensive weekly report.
-Format for Telegram: use Markdown (bold, italic, bullets, tables where space allows).
-Be analytical and honest — highlight both risks and opportunities.
-Total length: split into multiple messages if needed (each under 4000 chars)."""
+WEEKLY_REPORT_SYSTEM = """Jsi senior analytik grafenového sektoru. Píšeš komplexní týdenní report v češtině.
+Formát: Telegram Markdown (tučně, kurzíva, odrážky, tabulky kde je místo).
+Buď analytický a upřímný — vyzdvihni jak rizika, tak příležitosti.
+Celková délka: rozděl do více zpráv pokud potřeba (každá max 4000 znaků)."""
 
-WEEKLY_REPORT_USER = """Generate a weekly deep report for week ending {date}:
+WEEKLY_REPORT_USER = """Vytvoř týdenní hloubkový report pro týden zakončený {date}:
 
-WEEKLY PRICE PERFORMANCE:
+TÝDENNÍ VÝVOJ CEN:
 {weekly_prices}
 
-ALL HEADLINES THIS WEEK (scored):
+VŠECHNY ZPRÁVY TOHOTO TÝDNE (hodnocené):
 {all_headlines}
 
-INSIDER TRADES (if any):
+INSIDER OBCHODY (pokud existují):
 {insider_trades}
 
-RECENT PATENTS:
+NEDÁVNÉ PATENTY:
 {patents}
 
-SOCIAL TRENDS:
+SOCIÁLNÍ TRENDY:
 {google_trends}
 {sentiment_data}
 
-CASH RUNWAY ANALYSIS:
+ANALÝZA CASH RUNWAY:
 {cash_runway_notes}
 
-PENDING CATALYSTS:
+NADCHÁZEJÍCÍ KATALYZÁTORY:
 {catalysts}
 
 ---
-Structure as multiple sections (split into 2-3 messages if needed):
+Struktura (2-3 zprávy dle potřeby):
 
-MESSAGE 1:
-📈 *Weekly Graphene Intel — Week of {date}*
+ZPRÁVA 1:
+📈 *Týdenní přehled grafenového sektoru — týden do {date}*
 
-*Performance Summary*
-[table: ticker | week% | mkt cap | vol change]
+*Výkonnost*
+[tabulka: ticker | týden% | tržní kap. | změna objemu]
 
-*Key Stories This Week*
-[top 5-8 scored headlines with brief analysis]
+*Klíčové zprávy týdne*
+[top 5-8 hodnocených headlines s krátkou analýzou]
 
-*Insider Activity*
-[trades if any, otherwise "No insider trades reported"]
+*Insider aktivita*
+[obchody pokud existují, jinak "Žádné insider obchody neevidovány"]
 
-MESSAGE 2:
-*Competitor Landscape*
-[NanoXplore, GMG, Zentek, Argo — what moved and why]
+ZPRÁVA 2:
+*Konkurenční prostředí*
+[NanoXplore, GMG, Zentek, Argo — co se hýbalo a proč]
 
-*Patent Activity*
-[new patents if any]
+*Patentová aktivita*
+[nové patenty pokud existují]
 
-*Cash Runway Estimate*
-[HGRAF: last known cash + estimated burn rate = X months runway]
-[BSWGF: same]
+*Cash runway odhad*
+[HGRAF: poslední známý cash + odhadovaný burn rate = X měsíců]
+[BSWGF: totéž]
 
 *Google Trends*
-[search interest changes for HGRAF, HydroGraph, graphene]
+[změny zájmu o HGRAF, HydroGraph, grafen]
 
-MESSAGE 3:
-*Catalyst Tracker*
-[table: ticker | expected date | catalyst | status | risk level]
+ZPRÁVA 3:
+*Katalyzátory*
+[tabulka: ticker | očekávané datum | katalyzátor | stav | rizikovost]
 
-*Red Flags (if any)*
-[anything concerning this week]
+*Červené vlajky (pokud existují)*
+[cokoli znepokojivého z tohoto týdne]
 
-*Valuation Context*
-[market cap vs revenue comparison table for all tracked companies]
+*Valuační kontext*
+[srovnávací tabulka tržní kap. vs revenue pro všechny sledované firmy]
 
-*Bottom Line*
-[2-3 sentence honest assessment of where we are]
+*Závěr*
+[2-3 věty — upřímné zhodnocení aktuální situace]
 
-⚠️ _This is automated AI analysis, not investment advice._"""
+⚠️ _Toto je automatizovaná AI analýza, nikoliv investiční doporučení._"""
 
 
 # ─────────────────────────────────────────────────────────────────────────────

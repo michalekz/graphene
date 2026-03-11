@@ -41,26 +41,26 @@ EMOJI_FLAG = "⚠️"
 
 # Anomaly-type labels used in format_anomaly_alert
 _ANOMALY_LABELS: dict[str, str] = {
-    "volume_spike": "Volume Spike",
-    "price_spike": "Price Spike",
-    "price_drop": "Price Drop",
-    "gap_up": "Gap Up",
-    "gap_down": "Gap Down",
-    "ma_breach": "MA Breach",
-    "sector_signal": "Sector Signal",
-    "commodity_spike": "Commodity Spike",
+    "volume_spike": "Nárůst objemu",
+    "price_spike": "Cenový skok",
+    "price_drop": "Pokles ceny",
+    "gap_up": "Gap nahoru",
+    "gap_down": "Gap dolů",
+    "ma_breach": "Průlom MA",
+    "sector_signal": "Sektorový signál",
+    "commodity_spike": "Skok komodity",
 }
 
 # Contextual insight strings for anomaly types
 _ANOMALY_INSIGHTS: dict[str, str] = {
-    "volume_spike": "Unusual activity without press release — watch for news",
-    "price_spike": "Sharp intraday move — check for catalyst or halt",
-    "price_drop": "Sharp intraday decline — monitor for further weakness",
-    "gap_up": "Significant gap up at open — confirm with volume",
-    "gap_down": "Significant gap down at open — potential sell-off",
-    "ma_breach": "Price crossed below moving average — bearish technical signal",
-    "sector_signal": "Sector leader weakness — review all holdings for risk",
-    "commodity_spike": "Commodity price spike may affect production costs",
+    "volume_spike": "Neobvyklá aktivita bez tiskové zprávy — sledujte zprávy",
+    "price_spike": "Prudký intradenní pohyb — zkontrolujte katalyzátor nebo pozastavení",
+    "price_drop": "Prudký intradenní pokles — sledujte další oslabení",
+    "gap_up": "Výrazný gap nahoru při otevření — potvrďte objemem",
+    "gap_down": "Výrazný gap dolů při otevření — možný výprodej",
+    "ma_breach": "Cena klesla pod klouzavý průměr — medvědí technický signál",
+    "sector_signal": "Oslabení lídra sektoru — zkontrolujte všechny pozice",
+    "commodity_spike": "Skok ceny komodity může ovlivnit výrobní náklady",
 }
 
 
@@ -105,9 +105,17 @@ def _sentiment_emoji(sentiment: str) -> str:
     return EMOJI_NEUTRAL
 
 
+_SENTIMENT_LABELS_CS: dict[str, str] = {
+    "bullish": "BÝČÍ",
+    "bearish": "MEDVĚDÍ",
+    "neutral": "NEUTRÁLNÍ",
+}
+
+
 def _sentiment_label(sentiment: str) -> str:
-    """Return uppercase sentiment label."""
-    return (sentiment or "neutral").upper()
+    """Return Czech sentiment label."""
+    key = (sentiment or "neutral").lower()
+    return _SENTIMENT_LABELS_CS.get(key, key.upper())
 
 
 # ── Public formatters ──────────────────────────────────────────────────────────
@@ -161,7 +169,7 @@ def format_instant_alert(
     lines: list[str] = []
 
     # Header line: alert emoji + tickers in bold + score + sentiment colour
-    lines.append(f"{alert_emoji} *{_escape_md(ticker_str)}* — Score: {score}/10 {sent_emoji}")
+    lines.append(f"{alert_emoji} *{_escape_md(ticker_str)}* — Skóre: {score}/10 {sent_emoji}")
 
     # Headline title
     lines.append(f"{EMOJI_NEWS} {title}")
@@ -172,16 +180,16 @@ def format_instant_alert(
 
     # Source link
     if url:
-        lines.append(f"{EMOJI_LINK} [Source: {source}]({url})")
+        lines.append(f"{EMOJI_LINK} [Zdroj: {source}]({url})")
     else:
-        lines.append(f"{EMOJI_LINK} Source: {source}")
+        lines.append(f"{EMOJI_LINK} Zdroj: {source}")
 
     # Flags / sentiment footer
     footer_parts: list[str] = []
     if is_red_flag:
-        footer_parts.append(f"{EMOJI_FLAG} RED FLAG")
+        footer_parts.append(f"{EMOJI_FLAG} ČERVENÁ VLAJKA")
     if is_pump_suspect:
-        footer_parts.append("🚩 PUMP SUSPECT")
+        footer_parts.append("🚩 PODEZŘELÝ PUMP")
     footer_parts.append(f"{EMOJI_CATALYST} {_sentiment_label(sentiment)}")
     lines.append(" | ".join(footer_parts))
 
@@ -278,7 +286,7 @@ def format_daily_summary(
 
     # Price overview
     if prices:
-        price_lines: list[str] = [f"\n{EMOJI_PRICE} *Prices*"]
+        price_lines: list[str] = [f"\n{EMOJI_PRICE} *Ceny*"]
         for p in prices[:15]:  # cap at 15 rows
             ticker = _escape_md(str(p.get("ticker") or ""))
             close = p.get("close")
@@ -297,7 +305,7 @@ def format_daily_summary(
 
     # Top headlines
     if headlines:
-        hl_lines: list[str] = [f"\n{EMOJI_NEWS} *Top Headlines*"]
+        hl_lines: list[str] = [f"\n{EMOJI_NEWS} *Top zprávy*"]
         for h in headlines[:10]:
             score = int(h.get("score") or 0)
             title = _escape_md(str(h.get("title") or ""))
@@ -312,7 +320,7 @@ def format_daily_summary(
 
     # Anomalies
     if anomalies:
-        an_lines: list[str] = [f"\n{EMOJI_ANOMALY} *Anomalies*"]
+        an_lines: list[str] = [f"\n{EMOJI_ANOMALY} *Anomálie*"]
         for a in anomalies:
             label = _ANOMALY_LABELS.get(a.anomaly_type, a.anomaly_type)
             an_lines.append(
@@ -323,7 +331,7 @@ def format_daily_summary(
 
     # Sentiment snapshot
     if sentiment:
-        sent_lines: list[str] = [f"\n{EMOJI_INSIGHT} *Sentiment*"]
+        sent_lines: list[str] = [f"\n{EMOJI_INSIGHT} *Sentiment*"]  # Sentiment — stejné v češtině
         for ticker, scores in sentiment.items():
             if not scores:
                 continue
@@ -334,7 +342,7 @@ def format_daily_summary(
 
     # Pending catalysts
     if catalysts:
-        cat_lines: list[str] = [f"\n{EMOJI_CATALYST} *Pending Catalysts*"]
+        cat_lines: list[str] = [f"\n{EMOJI_CATALYST} *Nadcházející katalyzátory*"]
         for c in catalysts[:5]:
             ticker = _escape_md(str(c.get("ticker") or ""))
             desc = _escape_md(str(c.get("description") or ""))

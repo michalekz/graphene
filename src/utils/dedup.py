@@ -5,16 +5,19 @@ Two-stage approach:
   1. Fast Jaccard similarity on normalised title tokens — catches obvious
      same-story duplicates from different sources (Google News + TickerTick
      + graphene-info all publishing the same press release).
-  2. Optional LLM clustering via Claude Haiku for harder cases where simple
-     word overlap fails (paraphrased titles, different angles of same event).
+  2. LLM clustering via Groq — for borderline cases (0.25–0.55 Jaccard) where
+     two headlines might describe the same event with different wording.
+     A single batch call clusters N recent alert titles, cost ≈ $0.001.
 
-Thresholds (tunable via DEDUP_JACCARD_THRESHOLD env var, default 0.55):
-  ≥ threshold → skip alert (duplicate)
-  < threshold → send alert (unique enough)
+Environment:
+  DEDUP_JACCARD_THRESHOLD   — hard skip threshold (default 0.55)
+  DEDUP_LLM_SOFT_THRESHOLD  — below this, ask LLM (default 0.25)
+  DEDUP_USE_LLM             — "true" (default) / "false" to disable LLM stage
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import logging
@@ -84,6 +87,99 @@ def is_duplicate(title: str, recent_titles: Sequence[str], threshold: float | No
                 other[:60],
             )
             return True
+    return False
+
+
+_LLM_SOFT_THRESHOLD: float = float(os.getenv("DEDUP_LLM_SOFT_THRESHOLD", "0.25"))
+_USE_LLM: bool = os.getenv("DEDUP_USE_LLM", "true").lower() != "false"
+
+
+def _llm_is_same_story(candidate: str, recent_titles: Sequence[str]) -> bool:
+    """Ask Groq whether *candidate* covers the same story as any of *recent_titles*.
+
+    Called only when Jaccard is in the soft zone (0.25–0.55) — i.e. the titles
+    share some words but not enough to be certain.  One API call per candidate,
+    very cheap on Groq.
+
+    Returns True if LLM says it's a duplicate, False otherwise.
+    Falls back to False (send the alert) on any API error.
+    """
+    if not recent_titles:
+        return False
+    try:
+        from groq import Groq
+        api_key = os.getenv("GROQ_API_KEY", "")
+        if not api_key:
+            return False
+        client = Groq(api_key=api_key)
+
+        numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(recent_titles[:15]))
+        system = (
+            "You are a financial news deduplication assistant. "
+            "Respond ONLY with valid JSON."
+        )
+        user = (
+            f"NEW HEADLINE:\n{candidate}\n\n"
+            f"RECENTLY ALERTED HEADLINES:\n{numbered}\n\n"
+            "Does the NEW HEADLINE report on the same underlying event or story "
+            "as ANY of the recently alerted headlines?\n"
+            "Same story = same company announcement, same deal, same data release "
+            "(even if worded differently or from a different source).\n"
+            "Different story = different event, different data point, different angle.\n\n"
+            'Respond ONLY with: {"is_duplicate": true} or {"is_duplicate": false}'
+        )
+        resp = client.chat.completions.create(
+            model="llama-3.1-8b-instant",   # fastest/cheapest for binary decision
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            max_tokens=20,
+            temperature=0.0,
+        )
+        text = resp.choices[0].message.content.strip()
+        data = json.loads(text)
+        result = bool(data.get("is_duplicate", False))
+        if result:
+            logger.info("LLM dedup: duplicate detected for %r", candidate[:60])
+        return result
+    except Exception as exc:
+        logger.debug("LLM dedup API call failed (falling back to send): %s", exc)
+        return False
+
+
+def is_duplicate(title: str, recent_titles: Sequence[str], threshold: float | None = None) -> bool:
+    """
+    Two-stage duplicate detection:
+
+    Stage 1 — Jaccard:
+      ≥ hard threshold (0.55) → immediate duplicate, no LLM call needed
+      < soft threshold (0.25) → clearly different story, skip LLM
+
+    Stage 2 — LLM (Groq llama-3.1-8b-instant, ~$0.0001/call):
+      In the soft zone (0.25–0.55): ask LLM if it's the same underlying event.
+
+    Returns True → skip alert (duplicate)
+    Returns False → send alert (unique)
+    """
+    thr = threshold if threshold is not None else _JACCARD_THRESHOLD
+
+    max_sim = 0.0
+    for other in recent_titles:
+        sim = jaccard(title, other)
+        if sim >= thr:
+            logger.debug(
+                "Jaccard duplicate (%.2f >= %.2f): %r ≈ %r",
+                sim, thr, title[:60], other[:60],
+            )
+            return True
+        if sim > max_sim:
+            max_sim = sim
+
+    # Soft zone: ask LLM
+    if _USE_LLM and max_sim >= _LLM_SOFT_THRESHOLD:
+        return _llm_is_same_story(title, recent_titles)
+
     return False
 
 
