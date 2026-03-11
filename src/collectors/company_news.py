@@ -32,11 +32,52 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 
 COMPANY_SOURCES: list[dict[str, Any]] = [
+    # ── Primary ────────────────────────────────────────────────────────────────
+    {
+        "ticker": "HGRAF",
+        "name": "HydroGraph Clean Power",
+        "type": "rss",
+        "url": "https://hydrograph.com/feed/",
+        # Note: hydrograph.co (old domain) unreachable; hydrograph.com works
+    },
     {
         "ticker": "BSWGF",
         "name": "Black Swan Graphene",
         "type": "rss",
         "url": "https://blackswangraphene.com/feed/",
+    },
+    # ── Competitors ────────────────────────────────────────────────────────────
+    {
+        "ticker": "NNXPF",
+        "name": "NanoXplore",
+        "type": "wp_rest",
+        "url": "https://nanoxplore.com/wp-json/wp/v2/posts",
+        "params": {"per_page": 10, "_fields": "id,date,title,link,excerpt"},
+        # RSS feed exists but returns 0 items; WP REST works
+    },
+    {
+        "ticker": "GMGMF",
+        "name": "Graphene Manufacturing Group",
+        "type": "rss",
+        "url": "https://www.graphenemg.com/feed/",
+    },
+    {
+        "ticker": "ARLSF",
+        "name": "Argo Graphene",
+        "type": "rss",
+        "url": "https://argographene.com/feed/",
+    },
+    {
+        "ticker": "CVV",
+        "name": "CVD Equipment Corporation",
+        "type": "rss",
+        "url": "https://cvdequipment.com/feed/",
+    },
+    {
+        "ticker": "FGPHF",
+        "name": "First Graphene",
+        "type": "rss",
+        "url": "https://firstgraphene.net/feed/",
     },
     {
         "ticker": "DTPKF",
@@ -45,9 +86,7 @@ COMPANY_SOURCES: list[dict[str, Any]] = [
         "url": "https://www.directa-plus.com/wp-json/wp/v2/posts",
         "params": {"per_page": 10, "_fields": "id,date,title,link,excerpt"},
     },
-    # HydroGraph: hydrograph.co is currently unreachable — covered by Google News
-    # NanoXplore: https://nanoxplore.com (check periodically)
-    # Armadale Capital: armadale.com.au — no RSS found
+    # ZTEK (Zentek): zentek.com unreachable — covered by Google News + TickerTick
 ]
 
 _MAX_AGE_DAYS = 90  # ignore articles older than this (company IR RSS often lags)
