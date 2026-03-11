@@ -1,10 +1,12 @@
 """
 Patent filings collector for graphene-intel.
 
-Monitors recent graphene-related patent filings via the PatentsView API
-(https://search.patentsview.org). Scores patents by relevance to watched companies,
-persists them to the patent_filings table, and surfaces high-relevance patents
-as Headline objects for AI evaluation.
+Monitors recent graphene-related patent filings via the PatentsView PatentSearch API
+(https://search.patentsview.org/api/v1/patents — POST, requires X-Api-Key).
+
+If PATENTSVIEW_API_KEY is not set, the collector skips gracefully.
+Register for a free key at: https://search.patentsview.org/
+NOTE: As of early 2026, new key registrations are temporarily suspended.
 
 Relevance scoring:
   - 9: Patent assigned to HydroGraph or Black Swan Graphene
@@ -18,18 +20,20 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
-from urllib.parse import urlencode
+
+import httpx
 
 from src.db.store import Headline, Store
-from src.utils.http import fetch_json
 
 logger = logging.getLogger(__name__)
 
-# ── PatentsView API configuration ─────────────────────────────────────────────
+# ── PatentsView PatentSearch API configuration ────────────────────────────────
 
-PATENTSVIEW_BASE = "https://search.patentsview.org/api/v1/patent/"
+# New PatentSearch API (March 2024+) — POST, requires X-Api-Key header
+PATENTSVIEW_BASE = "https://search.patentsview.org/api/v1/patents"
 
 # Fields to retrieve per patent
 PATENT_FIELDS = [
@@ -37,10 +41,10 @@ PATENT_FIELDS = [
     "patent_title",
     "patent_date",
     "patent_abstract",
-    "assignees.assignee_organization",
+    "assignee",
 ]
 
-PATENTS_PER_PAGE = 25
+PATENTS_PER_PAGE = 100
 LOOKBACK_DAYS = 90
 
 # ── Company name patterns for relevance scoring ───────────────────────────────
@@ -66,22 +70,21 @@ COMPETITOR_ASSIGNEE_PATTERNS: list[tuple[str, str]] = [
     ("thomas swan", "BSWGF"),   # Thomas Swan distributes Black Swan's graphene
 ]
 
-# Search queries — ordered by expected relevance
+# Single combined query covering title + abstract (new API supports _or)
+# Using _text_all (all words must appear) for precision
 PATENT_QUERIES: list[dict[str, Any]] = [
-    # Exact phrase in title: high precision
     {
-        "label": "title:graphene",
-        "q": {"_text_phrase": {"patent_title": "graphene"}},
+        "label": "graphene (title or abstract)",
+        "q": {
+            "_or": [
+                {"_text_all": {"patent_title": "graphene"}},
+                {"_text_all": {"patent_abstract": "graphene"}},
+            ]
+        },
     },
-    # Abstract mention: broader coverage
     {
-        "label": "abstract:graphene",
-        "q": {"_text_phrase": {"patent_abstract": "graphene"}},
-    },
-    # Detonation synthesis — unique to HydroGraph's process
-    {
-        "label": "title:detonation synthesis",
-        "q": {"_text_phrase": {"patent_title": "detonation synthesis"}},
+        "label": "detonation synthesis (HydroGraph process)",
+        "q": {"_text_all": {"patent_title": "detonation synthesis"}},
     },
 ]
 
@@ -146,49 +149,55 @@ def _score_patent(
 async def _fetch_patents_for_query(
     query: dict[str, Any],
     since_date: str,
+    api_key: str,
 ) -> list[dict[str, Any]]:
     """
-    Fetch patents from PatentsView API matching the given query.
+    Fetch patents from PatentsView PatentSearch API (POST) matching the given query.
 
-    Adds a date filter to restrict results to patents from the last 90 days.
+    Uses the new v2 API: POST to /api/v1/patents with JSON body and X-Api-Key header.
     Returns a list of raw patent dicts from the API response.
-
-    PatentsView query format uses a nested JSON DSL; date ranges use _gte/_lte
-    combined with _and to merge with the content query.
     """
-    # Combine the content query with a date range filter
-    combined_q = {
-        "_and": [
-            query["q"],
-            {"_gte": {"patent_date": since_date}},
-        ]
-    }
-
-    params: dict[str, Any] = {
-        "q": json.dumps(combined_q),
-        "f": json.dumps(PATENT_FIELDS),
-        "s": json.dumps([{"patent_date": "desc"}]),
-        "o": json.dumps({"per_page": PATENTS_PER_PAGE}),
+    body: dict[str, Any] = {
+        "q": {
+            "_and": [
+                query["q"],
+                {"_gte": {"patent_date": since_date}},
+            ]
+        },
+        "f": PATENT_FIELDS,
+        "s": [{"patent_date": "desc"}],
+        "o": {"size": PATENTS_PER_PAGE},
     }
 
     logger.info(
-        "[patents] Fetching PatentsView query '%s' since %s",
+        "[patents] Fetching PatentSearch query '%s' since %s",
         query["label"],
         since_date,
     )
 
     try:
-        data = await fetch_json(PATENTSVIEW_BASE, params=params)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                PATENTSVIEW_BASE,
+                json=body,
+                headers={
+                    "X-Api-Key": api_key,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
     except Exception as exc:
         logger.error(
-            "[patents] PatentsView API request failed for '%s': %s",
+            "[patents] PatentSearch API request failed for '%s': %s",
             query["label"],
             exc,
         )
         return []
 
     patents: list[dict[str, Any]] = data.get("patents", []) or []
-    total = data.get("total_patent_count", len(patents))
+    total = data.get("total_hits", len(patents))
     logger.info(
         "[patents] Query '%s': %d patents returned (total matching: %s)",
         query["label"],
@@ -202,12 +211,18 @@ def _extract_assignee(patent: dict[str, Any]) -> str:
     """
     Extract the primary assignee organization name from a patent record.
 
-    PatentsView nests assignees as a list; we take the first entry.
+    New PatentSearch API returns 'assignee' as a dict (or list); we handle both.
     """
-    assignees: list[dict[str, Any]] = patent.get("assignees", []) or []
-    if not assignees:
+    raw = patent.get("assignee")
+    if not raw:
         return ""
-    return assignees[0].get("assignee_organization", "") or ""
+    # New API: dict with assignee_organization key
+    if isinstance(raw, dict):
+        return raw.get("assignee_organization", "") or ""
+    # Fallback: list of dicts (legacy format)
+    if isinstance(raw, list) and raw:
+        return raw[0].get("assignee_organization", "") or ""
+    return ""
 
 
 def _patent_url(patent_id: str) -> str:
@@ -335,6 +350,14 @@ async def collect_patents(
     Returns:
         List of high-relevance patent headlines for AI evaluation.
     """
+    api_key = os.getenv("PATENTSVIEW_API_KEY", "")
+    if not api_key:
+        logger.info(
+            "[patents] PATENTSVIEW_API_KEY not set — skipping patent collection. "
+            "Register at https://search.patentsview.org/ to enable."
+        )
+        return []
+
     headlines: list[Headline] = []
     seen_patent_ids: set[str] = set()
     since_date = (
@@ -345,7 +368,7 @@ async def collect_patents(
     total_inserted = 0
 
     for query in PATENT_QUERIES:
-        raw_patents = await _fetch_patents_for_query(query, since_date)
+        raw_patents = await _fetch_patents_for_query(query, since_date, api_key)
 
         for patent in raw_patents:
             patent_id: str = patent.get("patent_id", "")
