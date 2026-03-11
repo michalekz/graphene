@@ -227,8 +227,8 @@ def _extract_assignee(patent: dict[str, Any]) -> str:
 
 
 def _patent_url(patent_id: str) -> str:
-    """Construct the PatentsView detail page URL for a patent."""
-    return f"https://search.patentsview.org/patent/{patent_id}"
+    """Construct the USPTO patent detail page URL for a patent."""
+    return f"https://ppubs.uspto.gov/pubwebapp/external.html?q={patent_id}&type=patents"
 
 
 # ── DB insert helper ──────────────────────────────────────────────────────────
