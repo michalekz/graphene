@@ -99,13 +99,15 @@ class TelegramNotifier:
         self,
         text: str,
         parse_mode: str = "HTML",
+        silent: bool = False,
     ) -> Optional[int]:
         """
         Send a single Telegram message with up to *_MAX_RETRIES* attempts.
 
         Args:
-            text:       Message body (Markdown-formatted).
-            parse_mode: Telegram parse mode (default "Markdown").
+            text:       Message body (HTML-formatted).
+            parse_mode: Telegram parse mode (default "HTML").
+            silent:     If True, send without sound/vibration (low-priority).
 
         Returns:
             Telegram message_id on success, None on failure.
@@ -129,6 +131,7 @@ class TelegramNotifier:
                     text=text,
                     parse_mode=parse_mode,
                     disable_web_page_preview=True,
+                    disable_notification=silent,
                 )
                 logger.debug(
                     "Telegram message sent: id=%s attempt=%d", msg.message_id, attempt
@@ -211,7 +214,9 @@ class TelegramNotifier:
                     )
                     return False
 
-            msg_id = await self.send_message(text)
+            score = int(headline.get("score") or 0)
+            silent = score < 9  # score 9-10 → zvuk, 7-8 → tiše
+            msg_id = await self.send_message(text, silent=silent)
             if msg_id is None:
                 return False
 
@@ -259,7 +264,8 @@ class TelegramNotifier:
                 )
                 return False
 
-            msg_id = await self.send_message(text)
+            silent = anomaly.severity != "high"  # jen high severity = zvuk
+            msg_id = await self.send_message(text, silent=silent)
             if msg_id is None:
                 return False
 
@@ -330,7 +336,7 @@ class TelegramNotifier:
                     logger.debug("Daily summary chunk %d already sent — skipping", i)
                     continue
 
-                msg_id = await self.send_message(chunk)
+                msg_id = await self.send_message(chunk, silent=True)  # denní souhrn tiše
                 if msg_id is None:
                     logger.error("Failed to send daily summary chunk %d/%d", i, len(chunks))
                     all_ok = False
@@ -377,7 +383,8 @@ class TelegramNotifier:
                     logger.debug("Weekly report chunk %d already sent — skipping", i)
                     continue
 
-                msg_id = await self.send_message(chunk)
+                # První chunk týdenního reportu zazvoní, ostatní tiše
+                msg_id = await self.send_message(chunk, silent=(i > 1))
                 if msg_id is None:
                     logger.error("Failed to send weekly report chunk %d/%d", i, len(chunks))
                     all_ok = False
