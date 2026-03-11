@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Přihlášení — Graphene Intel{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+  <div class="col-md-4">
+    <div class="card shadow">
+      <div class="card-header text-center py-3">
+        <h5 class="mb-0">📊 Graphene Intel</h5>
+        <small class="text-muted">Dashboard — přihlášení</small>
+      </div>
+      <div class="card-body p-4">
+        {% if error %}
+        <div class="alert alert-danger py-2">{{ error }}</div>
+        {% endif %}
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label text-muted small">Uživatel</label>
+            <input type="text" name="username" class="form-control" autofocus autocomplete="username">
+          </div>
+          <div class="mb-4">
+            <label class="form-label text-muted small">Heslo</label>
+            <input type="password" name="password" class="form-control" autocomplete="current-password">
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Přihlásit se</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

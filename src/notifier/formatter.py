@@ -275,7 +275,11 @@ def format_daily_summary(
     from datetime import datetime, timezone
 
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    header = f"{EMOJI_PRICE} *Daily Summary — {date_str}*\n"
+    header = (
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 *DENNÍ SOUHRN — {date_str}*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    )
 
     if ai_summary and ai_summary.strip():
         full_text = header + ai_summary.strip()
@@ -371,7 +375,13 @@ def format_weekly_report(ai_report: str) -> list[str]:
     if not ai_report or not ai_report.strip():
         return []
 
-    header = f"{EMOJI_PRICE} *Weekly Report*\n\n"
+    from datetime import datetime, timezone
+    week_str = datetime.now(timezone.utc).strftime("t. %d. %m. %Y")
+    header = (
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📈 *TÝDENNÍ REPORT — {week_str}*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    )
     full_text = header + ai_report.strip()
 
     # Attempt to split on ## section headings

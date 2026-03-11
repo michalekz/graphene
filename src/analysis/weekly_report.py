@@ -26,7 +26,7 @@ from src.evaluator.prompts import WEEKLY_REPORT_SYSTEM, WEEKLY_REPORT_USER
 logger = logging.getLogger(__name__)
 
 SONNET_MODEL = "claude-sonnet-4-6"
-MAX_TOKENS = 4000  # weekly report is longer; Telegram splits it
+MAX_TOKENS = 8000  # weekly report is longer; Telegram splits it
 TICKERS_CONFIG = "/opt/grafene/config/tickers.yaml"
 
 
@@ -81,14 +81,14 @@ async def _calculate_weekly_performance(store: Store) -> dict[str, float]:
     for ticker in tickers:
         try:
             history = await store.get_price_history(ticker, days=8)
-            if len(history) < 2:
+            # Filter out rows without a close price (e.g. today before market open)
+            valid = [r for r in history if r.get("close") is not None and r["close"] > 0]
+            if len(valid) < 2:
                 continue
-            # sort ascending by timestamp — get_price_history already does this
-            earliest_close = history[0].get("close")
-            latest_close = history[-1].get("close")
-            if earliest_close and latest_close and earliest_close > 0:
-                pct = (latest_close - earliest_close) / earliest_close * 100
-                perf[ticker] = round(pct, 2)
+            earliest_close = valid[0]["close"]
+            latest_close = valid[-1]["close"]
+            pct = (latest_close - earliest_close) / earliest_close * 100
+            perf[ticker] = round(pct, 2)
         except Exception as exc:
             logger.warning("Weekly perf calc failed for %s: %s", ticker, exc)
 
@@ -118,10 +118,12 @@ def _format_weekly_prices(perf: dict[str, float], prices: list[dict]) -> str:
         if not ticker or ticker in seen:
             continue
         seen.add(ticker)
+        # Use close if available, fall back to prev_close (before market open)
+        close = p.get("close") or p.get("prev_close")
         rows_data.append((
             ticker,
             perf.get(ticker),
-            p.get("close"),
+            close,
             p.get("volume_ratio"),
         ))
 

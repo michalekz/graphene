@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Alert #{{ row.id }} — Graphene Intel{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="/" class="text-decoration-none small">← Zpět na přehled</a>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center gap-3">
+    <h5 class="mb-0">Alert #{{ row.id }}</h5>
+    {% set badge = ALERT_TYPE_BADGE.get(row.alert_type, 'secondary') %}
+    <span class="badge bg-{{ badge }}">{{ ALERT_TYPE_LABELS.get(row.alert_type, row.alert_type) }}</span>
+    {% if row.score %}
+      {% if row.score >= 9 %}
+        <span class="badge bg-danger">Skóre {{ row.score }}/10</span>
+      {% elif row.score >= 7 %}
+        <span class="badge bg-warning text-dark">Skóre {{ row.score }}/10</span>
+      {% else %}
+        <span class="badge bg-secondary">Skóre {{ row.score }}/10</span>
+      {% endif %}
+    {% endif %}
+    {% if row.is_red_flag %}<span class="badge bg-danger">⚠ Červená vlajka</span>{% endif %}
+    {% if row.is_pump_suspect %}<span class="badge bg-warning text-dark">🚩 Podezřelý pump</span>{% endif %}
+  </div>
+  <div class="card-body">
+    <div class="row g-3 mb-3">
+      <div class="col-md-6">
+        <table class="table table-sm">
+          <tr><th>Odesláno</th><td>{{ row.sent_at or '—' }}</td></tr>
+          <tr><th>Ticker</th><td><code>{{ row.tickers or '—' }}</code></td></tr>
+          <tr><th>Zdroj</th><td>{{ row.source or '—' }}</td></tr>
+          <tr><th>Sentiment</th><td>{{ row.sentiment or '—' }}</td></tr>
+          <tr><th>Kategorie</th><td>{{ row.category or '—' }}</td></tr>
+          <tr><th>Publikováno</th><td>{{ (row.published_at or '')[:19] or '—' }}</td></tr>
+          <tr><th>Vyhodnoceno</th><td>{{ (row.evaluated_at or '')[:19] or '—' }}</td></tr>
+          <tr><th>TG message_id</th><td>{{ row.telegram_message_id or '—' }}</td></tr>
+        </table>
+      </div>
+      <div class="col-md-6">
+        {% if row.title %}
+        <div class="mb-3">
+          <label class="small text-muted text-uppercase">Nadpis</label>
+          <div class="mt-1">
+            {% if row.url %}
+              <a href="{{ row.url }}" target="_blank" rel="noopener">{{ row.title }}</a>
+            {% else %}
+              {{ row.title }}
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+        {% if row.impact_summary %}
+        <div class="mb-3">
+          <label class="small text-muted text-uppercase">Dopad</label>
+          <div class="mt-1 text-light">{{ row.impact_summary }}</div>
+        </div>
+        {% endif %}
+        {% if row.affected_tickers %}
+        <div>
+          <label class="small text-muted text-uppercase">Ovlivněné tickery</label>
+          <div class="mt-1"><code>{{ row.affected_tickers }}</code></div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if row.raw_content %}
+    <div class="mt-2">
+      <label class="small text-muted text-uppercase">Obsah zprávy</label>
+      <pre class="mt-1">{{ row.raw_content | truncate(2000) }}</pre>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

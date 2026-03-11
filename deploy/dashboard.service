@@ -1,0 +1,21 @@
+[Unit]
+Description=Graphene Intel Web Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/grafene
+EnvironmentFile=/opt/grafene/.env
+ExecStart=/opt/grafene/.venv/bin/gunicorn \
+    -w 2 \
+    -b 127.0.0.1:5000 \
+    --timeout 30 \
+    --access-logfile /var/log/graphene-intel/dashboard-access.log \
+    --error-logfile  /var/log/graphene-intel/dashboard-error.log \
+    "web.app:create_app()"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Graphene Intel{% endblock %}</title>
+  <link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+    crossorigin="anonymous">
+  <style>
+    body { background: #0f1117; color: #e0e0e0; }
+    .navbar { background: #1a1d27 !important; border-bottom: 1px solid #2a2d3a; }
+    .navbar-brand { color: #4fc3f7 !important; font-weight: 700; letter-spacing: 1px; }
+    .card { background: #1a1d27; border: 1px solid #2a2d3a; }
+    .card-header { background: #22263a; border-bottom: 1px solid #2a2d3a; }
+    .table { --bs-table-bg: transparent; --bs-table-color: #e0e0e0;
+             --bs-table-striped-bg: rgba(255,255,255,.03); }
+    .table-hover tbody tr:hover { background: rgba(79, 195, 247, 0.07); }
+    th { color: #90caf9; font-size: .78rem; text-transform: uppercase;
+         letter-spacing: .04em; border-color: #2a2d3a !important; }
+    td { border-color: #1e2133 !important; vertical-align: middle; font-size: .85rem; }
+    .badge-instant  { background: #ef5350; }
+    .badge-anomaly  { background: #ffa726; color: #111; }
+    .badge-daily    { background: #42a5f5; }
+    .badge-weekly   { background: #66bb6a; color: #111; }
+    .stat-card .display-6 { color: #4fc3f7; }
+    a { color: #4fc3f7; } a:hover { color: #81d4fa; }
+    .form-control, .form-select {
+      background: #22263a; border: 1px solid #3a3d4a; color: #e0e0e0;
+    }
+    .form-control:focus, .form-select:focus {
+      background: #22263a; color: #e0e0e0; border-color: #4fc3f7;
+      box-shadow: 0 0 0 .2rem rgba(79,195,247,.15);
+    }
+    .pagination .page-link { background: #22263a; border-color: #3a3d4a; color: #90caf9; }
+    .pagination .page-item.active .page-link { background: #4fc3f7; border-color: #4fc3f7; color: #111; }
+    .score-high  { color: #ef5350; font-weight: 700; }
+    .score-med   { color: #ffa726; font-weight: 600; }
+    .score-low   { color: #90a4ae; }
+    pre { background: #0d1117; border: 1px solid #2a2d3a; padding: 1rem;
+          border-radius: .4rem; font-size: .78rem; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg">
+  <div class="container-fluid px-4">
+    <a class="navbar-brand" href="/">📊 Graphene Intel</a>
+    <div class="ms-auto d-flex align-items-center gap-3">
+      <small class="text-muted">Přihlášen: {{ session.get('logged_in') and 'admin' or '' }}</small>
+      <a href="/logout" class="btn btn-sm btn-outline-secondary">Odhlásit</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container-fluid px-4 py-4">
+  {% block content %}{% endblock %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+  integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmz5V7N3n5s7SHplkT+pIIBJqNO"
+  crossorigin="anonymous"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

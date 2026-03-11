@@ -120,6 +120,7 @@ class TelegramNotifier:
 
         bot = self._get_bot()
         last_exc: Optional[Exception] = None
+        current_parse_mode = parse_mode
 
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
@@ -127,16 +128,27 @@ class TelegramNotifier:
                 msg = await bot.send_message(
                     chat_id=self._chat_id,
                     text=text,
-                    parse_mode=parse_mode,
+                    parse_mode=current_parse_mode,
                     disable_web_page_preview=True,
                 )
                 logger.debug(
-                    "Telegram message sent: id=%s attempt=%d", msg.message_id, attempt
+                    "Telegram message sent: id=%s attempt=%d parse_mode=%s",
+                    msg.message_id, attempt, current_parse_mode,
                 )
                 return int(msg.message_id)
 
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
+                exc_str = str(exc)
+                # Markdown parse errors won't be fixed by retrying — fall back to plain text
+                if current_parse_mode and "parse entities" in exc_str.lower():
+                    logger.warning(
+                        "Markdown parse error on attempt %d — retrying as plain text: %s",
+                        attempt, exc,
+                    )
+                    current_parse_mode = None
+                    # No backoff sleep needed — different request
+                    continue
                 logger.warning(
                     "Telegram send attempt %d/%d failed: %s",
                     attempt,
